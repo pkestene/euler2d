@@ -1,0 +1,7 @@
+# regular build
+python setup.py clean
+python setup.py build_ext --inplace
+
+# change CFLAGS ?
+# see http://stackoverflow.com/questions/19779416/remove-all-default-compilar-arguments-in-setup-py
+OPT="-DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG -fwrapv -O3" CFLAGS="-march=x86-64 -mtune=generic -pipe -fstack-protector --param=ssp-buffer-size=4" python setup.py build_ext --inplace

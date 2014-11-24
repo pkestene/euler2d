@@ -1,0 +1,127 @@
+#
+# Build project:
+# python setup.py build_ext --inplace
+#
+
+import os, re
+import subprocess
+import commands
+
+from os.path import join as pjoin
+
+from setuptools import setup
+from distutils.extension import Extension
+
+from Cython.Distutils import build_ext
+
+# enable to dump annotate html for each pyx source file
+import Cython.Compiler.Options
+Cython.Compiler.Options.annotate = True
+
+# clean command
+from distutils.command.clean import clean as _clean
+from distutils.dir_util import remove_tree
+
+# numpy 
+import numpy
+
+#from distutils.core import setup
+#from Cython.Build import cythonize
+
+#
+# check if mpi4py is available
+#
+Have_MPI = True
+try:
+    import mpi4py
+except ImportError:
+    Have_MPI = False
+
+    
+compiler = 'gcc'
+#compiler = 'intel'
+if compiler == 'intel':
+    extra_compile_args = ['-O3']
+else:
+    extra_compile_args = []
+
+# mpi flags
+mpi_inc_dirs = []
+mpi_compile_args = []
+mpi_link_args = []
+
+if Have_MPI:
+    mpic = 'mpicc'
+    if compiler == 'intel':
+        print("WARNING: Intel compiler setup has not been tested !")
+        link_args = commands.getoutput(mpic + ' -cc=icc -link_info')
+        link_args = link_args[3:]
+        compile_args = commands.getoutput(mpic + ' -cc=icc -compile_info')
+        compile_args = compile_args[3:]
+    else:
+        link_args = commands.getoutput(mpic + ' --showme:link').split()
+        compile_args = commands.getoutput(mpic + ' --showme:compile').split()
+    mpi_link_args = link_args
+    mpi_compile_args = compile_args
+    mpi_inc_dirs.append(mpi4py.get_include())
+
+print("##################")
+print("mpi_link_args, mpi_compile_args, mpi_inc_dirs")
+print(mpi_link_args, mpi_compile_args, mpi_inc_dirs)
+print("##################")
+
+include_dirs = [numpy.get_include()]
+
+# --------------------------------------------------------------------
+# Clean target redefinition - force clean everything
+# --------------------------------------------------------------------
+relist=['^.*~$','^core\.*$','^#.*#$','^.*\.aux$','^.*\.pyc$','^.*\.o$','^.*\.so$','^.*\.vti$','^.*\.pvti$','^.*\.c$','^.*\.html$']
+reclean=[]
+
+for restring in relist:
+  reclean.append(re.compile(restring))
+
+def wselect(args,dirname,names):
+  for n in names:
+    for rev in reclean:
+      if (rev.match(n)):
+        os.remove("%s/%s"%(dirname,n))
+        break
+
+class clean(_clean):
+  def walkAndClean(self):
+    os.path.walk(".",wselect,[])
+  def run(self):
+    if (os.path.exists('./build')): remove_tree('./build')
+    if (os.path.exists('./dist')):  remove_tree('./dist')
+    self.walkAndClean()
+
+   
+# --------------------------------------------------------------------
+# Build extensions
+# --------------------------------------------------------------------
+setup(
+    name="euler2d_mpi",
+    author='Pierre Kestener',
+    version='0.1',
+    ext_modules = [
+        Extension(name='test.cython_test',
+                  sources=['test/cython_test.pyx']),
+        Extension(name='euler2d.hydroMonitoring',
+                  include_dirs = include_dirs,
+                  sources=['euler2d/hydroMonitoring.pyx']),
+        Extension(name='euler2d.hydroUtils',
+                  include_dirs = include_dirs+mpi_inc_dirs,
+                  libraries=['mpi'],
+                  extra_link_args=mpi_link_args,
+                  extra_compile_args=mpi_compile_args,
+                  sources=['euler2d/hydroUtils.pyx']),
+        Extension(name='euler2d.hydroRun',
+                  include_dirs = include_dirs+mpi_inc_dirs,
+                  libraries=['mpi'],
+                  extra_link_args=mpi_link_args,
+                  extra_compile_args=mpi_compile_args,
+                  sources=['euler2d/hydroRun.pyx'])
+        ],
+
+    cmdclass={'build_ext': build_ext, 'clean': clean})
