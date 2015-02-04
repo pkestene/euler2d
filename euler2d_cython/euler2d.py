@@ -19,6 +19,17 @@ try:
 except ImportError:
     vtkModuleFound = False
 
+# test if tvtk module is available
+# Example of use:
+# see http://docs.enthought.com/mayavi/mayavi/auto/example_datasets.html
+# see http://stackoverflow.com/questions/20035620/save-data-to-vtk-using-python-and-tvtk-with-more-than-one-vector-field
+try:
+    from tvtk.api import tvtk
+    from tvtk.api import write_data as tvtk_write_data
+    tvtkModuleFound = True
+except ImportError:
+    tvtkModuleFound = False
+
 # test if pyEVTK is available
 # See https://bitbucket.org/pauloh/pyevtk
 try:
@@ -42,16 +53,38 @@ def saveVTK(U, filename):
 
     # filename without suffix (.vti)
 
-    # use vtk module if available
-    if vtkModuleFound:
-        #writer = vtk.vtkXMLImageDataWriter()
-        #writer.SetFileName(filename)
+    # use tvtk module if available
+    if tvtkModuleFound:
+        # create an imageData
+        i = tvtk.ImageData(spacing=(1, 1, 1), origin=(0, 0, 0))
+
+        # add density field
+        i.cell_data.scalars = U[:,:,ID].ravel()
+        i.cell_data.scalars.name = 'rho'
+        i.dimensions = (U[:,:,ID].shape[0]+1, U[:,:,ID].shape[1]+1, 1) 
+
+        # add total energy
+        i.cell_data.add_array(U[:,:,IP].ravel())
+        i.cell_data.get_array(1).name = 'E'
+        i.cell_data.update()
+
+        # add velocity
+        i.cell_data.add_array(U[:,:,IU].ravel())
+        i.cell_data.get_array(2).name = 'mx'
+        i.cell_data.update()
+
+        i.cell_data.add_array(U[:,:,IV].ravel())
+        i.cell_data.get_array(3).name = 'my'
+        i.cell_data.update()
         
-        # TO BE CONTINUED
-        pass
+        # actual write data on disk
+        tvtk_write_data(i, filename)
+
+        #writer = tvtk.vtkXMLImageDataWriter()
+        #writer.SetFileName(filename)
 
     # use evtk module if available
-    if evtkModuleFound:
+    elif evtkModuleFound:
         
         isize = U.shape[0]
         jsize = U.shape[1]

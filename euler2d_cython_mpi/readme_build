@@ -1,3 +1,4 @@
+##############################################################
 # regular build
 python setup.py clean
 python setup.py build_ext --inplace
@@ -5,3 +6,12 @@ python setup.py build_ext --inplace
 # change CFLAGS ?
 # see http://stackoverflow.com/questions/19779416/remove-all-default-compilar-arguments-in-setup-py
 OPT="-DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG -fwrapv -O3" CFLAGS="-march=x86-64 -mtune=generic -pipe -fstack-protector --param=ssp-buffer-size=4" python setup.py build_ext --inplace
+
+##############################################################
+# how to run
+mpirun -np 4 python euler2d.py test_implode.ini
+
+# if you are using LANG env variable other than en_US.UTF-8
+# you may have to set it (if not tvtk may write ascii vtk files
+# with "," instead of "." for ascii numerical values !!!
+mpirun -np 4 -x LANG=en_US.UTF-8 python euler2d.py test_implode.ini
