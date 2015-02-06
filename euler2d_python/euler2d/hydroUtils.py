@@ -15,6 +15,11 @@ IV    = hydroParam.IV
 
 NBVAR = hydroParam.NBVAR
 
+FACE_XMIN = hydroParam.FACE_XMIN
+FACE_XMAX = hydroParam.FACE_XMAX
+FACE_YMIN = hydroParam.FACE_YMIN
+FACE_YMAX = hydroParam.FACE_YMAX
+
 IX    = hydroParam.IX
 IY    = hydroParam.IY
 
@@ -372,6 +377,82 @@ class hydroUtils(object):
         qm[IY,IP] = max(self.smallp * qm[IY,ID], qm[IY,IP])
 
         return qm, qp
+
+    #########################################
+    def trace_unsplit_hydro_2d_by_direction(self, q, dqX, dqY, dtdx, dtdy, faceId):
+
+        # create returned reconstructed state
+        qface = np.zeros(NBVAR)
+        
+        # Cell centered values
+        r = q[ID]
+        p = q[IP]
+        u = q[IU]
+        v = q[IV]
+
+        # Cell centered TVD slopes in X direction
+        drx = dqX[ID];  drx *= 0.5
+        dpx = dqX[IP];  dpx *= 0.5
+        dux = dqX[IU];  dux *= 0.5
+        dvx = dqX[IV];  dvx *= 0.5
+  
+        # Cell centered TVD slopes in Y direction
+        dry = dqY[ID];  dry *= 0.5
+        dpy = dqY[IP];  dpy *= 0.5
+        duy = dqY[IU];  duy *= 0.5
+        dvy = dqY[IV];  dvy *= 0.5
+
+        # Source terms (including transverse derivatives)
+        # only true for cartesian grid
+        sr0 = (-u*drx-dux*r)            *dtdx + (-v*dry-dvy*r)            *dtdy
+        su0 = (-u*dux-dpx/r)            *dtdx + (-v*duy      )            *dtdy
+        sv0 = (-u*dvx      )            *dtdx + (-v*dvy-dpy/r)            *dtdy
+        sp0 = (-u*dpx-dux*self.gamma0*p)*dtdx + (-v*dpy-dvy*self.gamma0*p)*dtdy    
+        # end cartesian
+
+        # Update in time the  primitive variables
+        r = r + sr0
+        u = u + su0
+        v = v + sv0
+        p = p + sp0
+
+        if faceId == FACE_XMIN:
+            # Face averaged right state at left interface
+            qface[ID] = r - drx
+            qface[IU] = u - dux
+            qface[IV] = v - dvx
+            qface[IP] = p - dpx
+            qface[ID] = max(self.smallr,  qface[ID])
+            qface[IP] = max(self.smallp * qface[ID], qface[IP])
+
+        if faceId == FACE_XMAX:
+            # Face averaged left state at right interface
+            qface[ID] = r + drx
+            qface[IU] = u + dux
+            qface[IV] = v + dvx
+            qface[IP] = p + dpx
+            qface[ID] = max(self.smallr,  qface[ID])
+            qface[IP] = max(self.smallp * qface[ID], qface[IP])
+
+        if faceId == FACE_YMIN:
+            # Face averaged top state at bottom interface
+            qface[ID] = r - dry
+            qface[IU] = u - duy
+            qface[IV] = v - dvy
+            qface[IP] = p - dpy
+            qface[ID] = max(self.smallr,  qface[ID])
+            qface[IP] = max(self.smallp * qface[ID], qface[IP])
+
+        if faceId == FACE_YMAX:
+            # Face averaged bottom state at top interface
+            qface[ID] = r + dry
+            qface[IU] = u + duy
+            qface[IV] = v + dvy
+            qface[IP] = p + dpy
+            qface[ID] = max(self.smallr,  qface[ID])
+            qface[IP] = max(self.smallp * qface[ID], qface[IP])
+
+        return qface
 
     #########################################
     def riemann_approx(self, qleft, qright):

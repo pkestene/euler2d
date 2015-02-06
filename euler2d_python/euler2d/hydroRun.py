@@ -19,6 +19,12 @@ IU    = hydroParam.IU
 IV    = hydroParam.IV
 
 NBVAR = hydroParam.NBVAR
+TWO_D = hydroParam.TWO_D
+
+FACE_XMIN = hydroParam.FACE_XMIN
+FACE_XMAX = hydroParam.FACE_XMAX
+FACE_YMIN = hydroParam.FACE_YMIN
+FACE_YMAX = hydroParam.FACE_YMAX
 
 IX    = hydroParam.IX
 IY    = hydroParam.IY
@@ -77,10 +83,10 @@ class hydroRun(object):
         # define workspace
         self.U  = np.zeros((self.param.isize,self.param.jsize,NBVAR))
         self.U2 = np.zeros((self.param.isize,self.param.jsize,NBVAR))
+        self.Q  = np.zeros((self.param.isize,self.param.jsize,NBVAR))
 
         # if we use implementation version 1, we need other arrays
         if self.param.implementationVersion == 1:
-            self.Q    = np.zeros((self.param.isize,self.param.jsize,NBVAR))
             self.Qm_x = np.zeros((self.param.isize,self.param.jsize,NBVAR))
             self.Qm_y = np.zeros((self.param.isize,self.param.jsize,NBVAR))
             self.Qp_x = np.zeros((self.param.isize,self.param.jsize,NBVAR))
@@ -183,6 +189,16 @@ class hydroRun(object):
 
         return self.param.cfl / invDt
 
+    ########################################################
+    def compute_primitives(self,U):
+        """
+        Convert conservative variables to primitive.
+        """
+        for j in xrange(0,self.param.jsize):
+            for i in xrange(0,self.param.isize):
+                qLoc, c = self.utils.computePrimitives_ij(U,i,j)
+                self.Q[i,j,:] = qLoc[:]
+                
     ########################################################
     def make_boundaries(self,useU):
         """
@@ -311,54 +327,88 @@ class hydroRun(object):
         # main computation
         hydroMonitoring.godunov_timer.start()
 
+        # convert to primitive variables
+        self.compute_primitives(U)
+        
         if self.param.implementationVersion==0:
 
             for j in xrange(gw, jsize-gw+1):
                 for i in xrange(gw, isize-gw+1):
 	
-                    qm_x = np.zeros((3,NBVAR))
-                    qm_y = np.zeros((3,NBVAR))
-                    qp_x = np.zeros((3,NBVAR))
-                    qp_y = np.zeros((3,NBVAR))
+                    # primitive variables in neighborhood
+                    qLoc = np.zeros(NBVAR)
+                    qLocN = np.zeros(NBVAR)
+                    qNeighbors = np.zeros((2*TWO_D,NBVAR))
 
-                    # compute qm, qp for the 1+2 positions
-                    for pos in xrange (3):
-	  
-                        ii=copy.deepcopy(i)
-                        jj=copy.deepcopy(j)
-                        if pos==1:
-                            ii -= 1
-                        if pos==2:
-                            jj -= 1
+                    # get slopes in current cell
+                    qLoc[:] = self.Q[i,j,:] 
 
-                        qNeighbors = np.zeros((4,NBVAR))
-     
-                        qLoc,   c             = self.utils.computePrimitives_ij(U, ii  , jj  )
-                        qNeighbors[0], cPlus  = self.utils.computePrimitives_ij(U, ii+1, jj  )
-                        qNeighbors[1], cMinus = self.utils.computePrimitives_ij(U, ii-1, jj  )
-                        qNeighbors[2], cPlus  = self.utils.computePrimitives_ij(U, ii  , jj+1)
-                        qNeighbors[3], cMinus = self.utils.computePrimitives_ij(U, ii  , jj-1)
+                    qNeighbors[0] = self.Q[i+1,j  ,:]
+                    qNeighbors[1] = self.Q[i-1,j  ,:]
+                    qNeighbors[2] = self.Q[i  ,j+1,:]
+                    qNeighbors[3] = self.Q[i  ,j-1,:]
 	  
-                        # compute qm, qp
-                        qm, qp = self.utils.trace_unsplit_2d(qLoc, qNeighbors, c, dtdx, dtdy)
-	  
-                        # store qm, qp
-                        qm_x[pos] = qm[0]
-                        qp_x[pos] = qp[0]
-                        qm_y[pos] = qm[1]
-                        qp_y[pos] = qp[1]
+                    # compute slopes in current cell
+                    dqX, dqY = self.utils.slope_unsplit_hydro_2d(qLoc, qNeighbors)
+    
+                    ##################################
+                    # left interface along X direction
+                    ##################################
 
-                    # Solve Riemann problem at X-interfaces and compute X-fluxes
-                    qleft   = qm_x[1]
-                    qright  = qp_x[0]
+                    # get primitive variables state vector in
+                    # left neighbor along X
+                    qLocN[:] = self.Q[i-1,j,:] 
+
+                    qNeighbors[0] = self.Q[i  ,j  ,:]
+                    qNeighbors[1] = self.Q[i-2,j  ,:]
+                    qNeighbors[2] = self.Q[i-1,j+1,:]
+                    qNeighbors[3] = self.Q[i-1,j-1,:]
+
+                    # compute slopes in left neighbor along X
+                    dqX_n, dqY_n = self.utils.slope_unsplit_hydro_2d(qLocN, qNeighbors)
+
+                    #
+                    # Compute reconstructed states at left interface
+                    #  along X in current cell
+                    #
+
+                    # left interface : right state
+                    qright = self.utils.trace_unsplit_hydro_2d_by_direction(qLoc, dqX, dqY, dtdx, dtdy, FACE_XMIN)
+
+                    # left interface : left state
+                    qleft = self.utils.trace_unsplit_hydro_2d_by_direction(qLocN, dqX_n, dqY_n, dtdx, dtdy, FACE_XMAX)
 
                     flux_x = self.utils.riemann_2d(qleft,qright)
 
-                    # Solve Riemann problem at Y-interfaces and compute Y-fluxes
-                    qleft   = qm_y[2]
+                    ##################################
+                    # left interface along Y direction
+                    ##################################
+
+                    # get primitive variables state vector in
+                    # left neighbor along Y
+                    qLocN[:] = self.Q[i,j-1,:] 
+
+                    qNeighbors[0] = self.Q[i+1,j-1,:]
+                    qNeighbors[1] = self.Q[i-1,j-1,:]
+                    qNeighbors[2] = self.Q[i  ,j  ,:]
+                    qNeighbors[3] = self.Q[i  ,j-2,:]
+	  
+                    # compute slopes in current cell
+                    dqX_n, dqY_n = self.utils.slope_unsplit_hydro_2d(qLocN, qNeighbors)
+
+                    #
+                    # Compute reconstructed states at left interface
+                    #  along X in current cell
+                    #
+
+                    # left interface : right state
+                    qright = self.utils.trace_unsplit_hydro_2d_by_direction(qLoc, dqX, dqY, dtdx, dtdy, FACE_YMIN)
+
+                    # left interface : left state
+                    qleft = self.utils.trace_unsplit_hydro_2d_by_direction(qLocN, dqX_n, dqY_n,dtdx, dtdy, FACE_YMAX)
+
                     qleft[IU], qleft[IV] = qleft[IV], qleft[IU] # watchout IU, IV permutation
 	  
-                    qright  = qp_y[0]
                     qright[IU], qright[IV]  = qright[IV], qright[IU] # watchout IU, IV permutation
                     
                     flux_y = self.utils.riemann_2d(qleft,qright)

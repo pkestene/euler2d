@@ -19,8 +19,17 @@ IV=3  # Y velocity / momentum index
 
 NBVAR = 4
 
+TWO_D = 2
+
+# identifying direction
 IX=0
 IY=1
+
+# identifying directions for reconstructed state on cell faces
+FACE_XMIN=0
+FACE_XMAX=1
+FACE_YMIN=2
+FACE_YMAX=3
 
 # type of boundary condition (note that BC_COPY is only used in the
 # MPI version for inside boundary)
