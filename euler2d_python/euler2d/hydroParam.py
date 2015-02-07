@@ -164,30 +164,30 @@ class hydroParams(object):
         self.smallp  = self.smallc * self.smallc / self.gamma0
         self.smallpp = self.smallr * self.smallp
         self.gamma6  = (self.gamma0 + 1.0)/(2.0 * self.gamma0)
-  
+
 
     ########################################################
     def printConfig(self):
 
-        print  "##########################"
-        print  "Simulation run parameters:"
-        print  "##########################"
-        print  "nx         : {}".format(self.nx)
-        print  "ny         : {}".format(self.ny)
-        print  "dx         : {}".format(self.dx)
-        print  "dy         : {}".format(self.dy)
-        print  "imin       : {}".format(self.imin)
-        print  "imax       : {}".format(self.imax)
-        print  "jmin       : {}".format(self.jmin)    
-        print  "jmax       : {}".format(self.jmax)     
-        print  "nStepmax   : {}".format(self.nStepmax)
-        print  "tEnd       : {}".format(self.tEnd)
-        print  "nOutput    : {}".format(self.nOutput)
-        print  "gamma0     : {}".format(self.gamma0)
-        print  "cfl        : {}".format(self.cfl)
-        print  "smallr     : {}".format(self.smallr)
-        print  "smallc     : {}".format(self.smallc)
-        print  "iorder     : {}".format(self.iorder)
-        print  "slope_type : {}".format(self.slope_type)
-        print  "problem    : {}".format(self.problem)
+        print "##########################"
+        print "Simulation run parameters:"
+        print "##########################"
+        print "nx         : {}".format(self.nx)
+        print "ny         : {}".format(self.ny)
+        print "dx         : {}".format(self.dx)
+        print "dy         : {}".format(self.dy)
+        print "imin       : {}".format(self.imin)
+        print "imax       : {}".format(self.imax)
+        print "jmin       : {}".format(self.jmin)
+        print "jmax       : {}".format(self.jmax)
+        print "nStepmax   : {}".format(self.nStepmax)
+        print "tEnd       : {}".format(self.tEnd)
+        print "nOutput    : {}".format(self.nOutput)
+        print "gamma0     : {}".format(self.gamma0)
+        print "cfl        : {}".format(self.cfl)
+        print "smallr     : {}".format(self.smallr)
+        print "smallc     : {}".format(self.smallc)
+        print "iorder     : {}".format(self.iorder)
+        print "slope_type : {}".format(self.slope_type)
+        print "problem    : {}".format(self.problem)
 
