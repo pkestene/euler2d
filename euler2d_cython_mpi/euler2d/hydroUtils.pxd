@@ -56,6 +56,15 @@ cdef class hydroUtils:
                                 double[2][4] qm,
                                 double[2][4] qp)
     
+    cdef trace_unsplit_hydro_2d_by_direction(self,
+                                             double[4] q,
+                                             double[4] dqX,
+                                             double[4] dqY,
+                                             double dtdx,
+                                             double dtdy,
+                                             int faceId,
+                                             double[4] qface)
+
     cdef riemann_2d(self,
                     double[4] qleft, 
                     double[4] qright,

@@ -58,6 +58,11 @@ cdef int IV    = hydroParam.IV
 
 cdef int NBVAR = hydroParam.NBVAR
 
+cdef int FACE_XMIN = hydroParam.FACE_XMIN
+cdef int FACE_XMAX = hydroParam.FACE_XMAX
+cdef int FACE_YMIN = hydroParam.FACE_YMIN
+cdef int FACE_YMAX = hydroParam.FACE_YMAX
+
 cdef int IX    = hydroParam.IX
 cdef int IY    = hydroParam.IY
 
@@ -137,10 +142,10 @@ cdef class hydroRun:
         # define workspace
         self.U  = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
         self.U2 = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
+        self.Q  = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
 
         # if we use implementation version 1, we need other arrays
         if self.implementationVersion == 1:
-            self.Q    = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
             self.Qm_x = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
             self.Qm_y = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
             self.Qp_x = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
@@ -778,16 +783,24 @@ cdef class hydroRun:
         cdef int isize, jsize, gw
         cdef double[4] uLoc
         cdef double[4] qLoc
-        cdef double[4] flux_x
-        cdef double[4] flux_y
+        cdef double[4] qLocN
+        cdef double[4][4] qNeighbors
+
+        cdef double[4] dqX
+        cdef double[4] dqY
+        cdef double[4] dqX_n
+        cdef double[4] dqY_n
+        
         cdef double[4] qleft
         cdef double[4] qright
+        cdef double[4] flux_x
+        cdef double[4] flux_y
+
         cdef double[3][4] qm_x
         cdef double[3][4] qm_y
         cdef double[3][4] qp_x
         cdef double[3][4] qp_y
 
-        cdef double[4][4] qNeighbors
                 
         cdef double[2][4] qm
         cdef double[2][4] qp
@@ -795,7 +808,9 @@ cdef class hydroRun:
         cdef double c, cPlus, cMinus
         cdef int i, j, k, ii, jj, pos
         cdef int ivar
-        
+
+        cdef np.ndarray[double, ndim=3] Q = self.Q
+
         dtdx  = dt / self.dx
         dtdy  = dt / self.dy
         isize = self.isize
@@ -818,71 +833,75 @@ cdef class hydroRun:
         # main computation
         hydroMonitoring.godunov_timer.start()
 
+        # convert to primitive variables
+        self.convertToPrimitive(U, Q)
+        
         if self.implementationVersion==0:
 
             for j in xrange(gw, jsize-gw+1):
                 for i in xrange(gw, isize-gw+1):
 	                  
-                    # compute qm, qp for the 1+2 positions
-                    for pos in xrange (3):
-        
-                        ii=i
-                        jj=j
-                        if pos==1:
-                            ii -= 1
-                        if pos==2:
-                            jj -= 1
-
-                        for ivar in range(NBVAR):
-                            uLoc[ivar] = U[ii  ,jj  , ivar]
-                        self.utils.computePrimitives(uLoc,qLoc,&c)
-
-                        for ivar in range(NBVAR):
-                            uLoc[ivar] = U[ii+1,jj  ,ivar]
-                        self.utils.computePrimitives(uLoc,qNeighbors[0],&c)
-                        
-                        for ivar in range(NBVAR):
-                            uLoc[ivar] = U[ii-1,jj  ,ivar]
-                        self.utils.computePrimitives(uLoc,qNeighbors[1],&c)
-                        
-                        for ivar in range(NBVAR):
-                            uLoc[ivar] = U[ii  ,jj+1,ivar]
-                        self.utils.computePrimitives(uLoc,qNeighbors[2],&c)
-                        
-                        for ivar in range(NBVAR):
-                            uLoc[ivar] = U[ii  ,jj-1,ivar]
-                        self.utils.computePrimitives(uLoc,qNeighbors[3],&c)
-                        
-                        # compute qm, qp
-                        self.utils.trace_unsplit_2d(qLoc, qNeighbors, c, dtdx, dtdy, qm, qp)
-	  
-                        # store qm, qp
-                        for ivar in range(NBVAR):
-                            qm_x[pos][ivar] = qm[0][ivar]
-                            qp_x[pos][ivar] = qp[0][ivar]
-                            qm_y[pos][ivar] = qm[1][ivar]
-                            qp_y[pos][ivar] = qp[1][ivar]
-
-                    # Solve Riemann problem at X-interfaces and compute X-fluxes
-                    #for ivar in range(NBVAR):
-                    #    qleft[ivar]   = qm_x[1,ivar]
-                    #    qright[ivar]  = qp_x[0,ivar]
-
+                    # compute slopes in current cell
                     for ivar in range(NBVAR):
-                        qleft[ivar]   = qm_x[1][ivar]
-                        qright[ivar]  = qp_x[0][ivar]
+                        qLoc[ivar] = Q[i  ,j  , ivar]
+                        qNeighbors[0][ivar] = Q[i+1,j  ,ivar]
+                        qNeighbors[1][ivar] = Q[i-1,j  ,ivar]
+                        qNeighbors[2][ivar] = Q[i  ,j+1,ivar]
+                        qNeighbors[3][ivar] = Q[i  ,j-1,ivar]
 
+                    # compute slopes in current cell
+                    self.utils.slope_unsplit_hydro_2d(qLoc, qNeighbors, dqX, dqY)
+
+                    ##################################
+                    # left interface along X direction
+                    ##################################
+
+                    # compute slopes in left neighbor along X
+                    for ivar in range(NBVAR):
+                        qLocN[ivar] = Q[i-1,j  , ivar]
+                        qNeighbors[0][ivar] = Q[i  ,j  ,ivar]
+                        qNeighbors[1][ivar] = Q[i-2,j  ,ivar]
+                        qNeighbors[2][ivar] = Q[i-1,j+1,ivar]
+                        qNeighbors[3][ivar] = Q[i-1,j-1,ivar]
+
+                    # compute slopes in neighbor
+                    self.utils.slope_unsplit_hydro_2d(qLocN, qNeighbors, dqX_n, dqY_n)
+                                        
+                    # left interface : right state
+                    self.utils.trace_unsplit_hydro_2d_by_direction(qLoc, dqX, dqY, dtdx, dtdy, FACE_XMIN, qright)
+
+                    # left interface : left state
+                    self.utils.trace_unsplit_hydro_2d_by_direction(qLocN, dqX_n, dqY_n, dtdx, dtdy, FACE_XMAX, qleft)
+
+                    # compute riemann problem for X interface
                     self.utils.riemann_2d(qleft,qright,flux_x)
 
-                    # Solve Riemann problem at Y-interfaces and compute Y-fluxes
+                    ##################################
+                    # left interface along Y direction
+                    ##################################
+
+                    # compute slopes in left neighbor along Y
                     for ivar in range(NBVAR):
-                        qleft[ivar]   = qm_y[2][ivar]
-                        qright[ivar]  = qp_y[0][ivar]
+                        qLocN[ivar] = Q[i  ,j-1, ivar]
+                        qNeighbors[0][ivar] = Q[i+1,j-1,ivar]
+                        qNeighbors[1][ivar] = Q[i-1,j-1,ivar]
+                        qNeighbors[2][ivar] = Q[i  ,j  ,ivar]
+                        qNeighbors[3][ivar] = Q[i  ,j-2,ivar]
+
+                    # compute slopes in neighbor
+                    self.utils.slope_unsplit_hydro_2d(qLocN, qNeighbors, dqX_n, dqY_n)
+
+                    # left interface : right state
+                    self.utils.trace_unsplit_hydro_2d_by_direction(qLoc, dqX, dqY, dtdx, dtdy, FACE_YMIN, qright)
+
+                    # left interface : left state
+                    self.utils.trace_unsplit_hydro_2d_by_direction(qLocN, dqX_n, dqY_n, dtdx, dtdy, FACE_YMAX, qleft)
 
                     # watchout IU, IV permutation
-                    qleft[IU], qleft[IV] = qleft[IV], qleft[IU]
-                    qright[IU], qright[IV]  = qright[IV], qright[IU] 
-                    
+                    qleft[IU], qleft[IV] = qleft[IV], qleft[IU]	  
+                    qright[IU], qright[IV] = qright[IV], qright[IU]
+
+                    # compute riemann problem for Y interface
                     self.utils.riemann_2d(qleft,qright,flux_y)
 
                     # swap flux_y components
@@ -899,9 +918,6 @@ cdef class hydroRun:
                         U2[i  ,j  ,ivar] += ( flux_y[ivar]*dtdy)
 
         elif self.implementationVersion == 1:
-
-            # convert to primitive variables
-            self.convertToPrimitive(U, self.Q)
 
             # compute slopes and perform trace
             self.computeSlopesAndTrace(self.Q,
