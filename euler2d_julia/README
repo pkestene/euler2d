@@ -1,0 +1,6 @@
+# To run
+julia ./euler2d.jl ./test_implode.ini
+
+# or simply
+julia ./euler2d.jl
+
