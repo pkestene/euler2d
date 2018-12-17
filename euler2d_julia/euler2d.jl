@@ -1,5 +1,7 @@
 import Hydro2d
 
+using Printf
+
 function main()
 
     # default parameter file
@@ -53,14 +55,17 @@ function main()
     timer_total  = Hydro2d.Timer_t()
     timer_io     = Hydro2d.Timer_t()
 
+    dt =  Hydro2d.compute_dt(hr,0)
+    
     println("Start computation...")
     Hydro2d.timer_start(timer_total)
-    tic()
+    #tic()
 
     # Hydrodynamics solver loop
     t     = 0.0
     nStep = 0
-    while t < par.tEnd && nStep < par.nStepmax
+    #while t < par.tEnd && nStep < par.nStepmax
+    while nStep < par.nStepmax
         # output
         Hydro2d.timer_start(timer_io)
         if nStep % par.nOutput == 0
@@ -90,10 +95,10 @@ function main()
         nStep += 1
         t+=dt
     end
-    t_tot = toc()
+    #t_tot = toc()
     Hydro2d.timer_stop(timer_total)
 
-    #t_tot = Hydro2d.elapsed(timer_total)
+    t_tot = Hydro2d.elapsed(timer_total)
     t_io  = Hydro2d.elapsed(timer_io)
 
     @printf("total       time : %5.3f secondes\n",t_tot)

@@ -1,11 +1,11 @@
 # for calling gettimeofday in libc
-type Timeval_t
+struct Timeval_t
     tv_sec::Clong
     tv_usec::Cuint
 end
 
 # our timer type
-type Timer_t
+mutable struct Timer_t
     start_time::Timeval_t
     total_time::Float64
 
@@ -14,10 +14,11 @@ type Timer_t
 end
 
 # wrap around gettimeofday in C
-function get_time_of_day(timeval::Timeval_t)
+function get_time_of_day!(timeval::Timeval_t)
     #timeval = Array(Timeval_t, 1)
-    ccall(:gettimeofday, Cint, (Ptr{Void}, Ptr{Void}), &timeval, C_NULL)
-    return timeval
+    tmp = Ref{Timeval_t}(timeval)
+    ccall(:gettimeofday, Cint, (Ptr{Timeval_t}, Ptr{Cvoid}), tmp, C_NULL)
+    timeval = tmp[]
 end
 
 
@@ -35,7 +36,7 @@ function timer_start(t::Timer_t)
 
     timeval = t.start_time
     typeof(timeval)
-    get_time_of_day(timeval)
+    get_time_of_day!(timeval)
 
     #println(t.total_time)
 end
@@ -47,7 +48,7 @@ function timer_stop(t::Timer_t)
     start = t.start_time
     now = Timeval_t(0,0)
 
-    get_time_of_day(now)
+    get_time_of_day!(now)
     
     # accumulate time between last start and now
     if (now.tv_sec == start.tv_sec)

@@ -1,4 +1,6 @@
-type HydroRun
+using Printf
+
+mutable struct HydroRun
 
     # parameters
     par::HydroParam
@@ -109,7 +111,7 @@ function compute_dt(hydroRun::HydroRun,
         U = hydroRun.U2
     end
         
-    invDt = 0
+    invDt = 0.0
     dx = par.dx
     dy = par.dy
     
@@ -118,7 +120,7 @@ function compute_dt(hydroRun::HydroRun,
             qLoc, c = computePrimitives_ij(U,i,j, par)
             vx = c + abs(qLoc[IU])
             vy = c + abs(qLoc[IV])
-            
+
             invDt = max(invDt, vx/dx + vy/dy)
             
         end
@@ -401,11 +403,11 @@ function godunov_unsplit_cpu(hydroRun::HydroRun,
                 #
                 # update hydro array
                 #
-                U2[i-1,j  ,:] += reshape(-flux_x[:]*dtdx,1,1,NBVAR)
-                U2[i  ,j  ,:] += reshape( flux_x[:]*dtdx,1,1,NBVAR)
+                U2[i-1,j  ,:] += -flux_x[:].*dtdx
+                U2[i  ,j  ,:] +=  flux_x[:].*dtdx
                 
-                U2[i  ,j-1,:] += reshape(-flux_y[:]*dtdy,1,1,NBVAR)
-                U2[i  ,j  ,:] += reshape( flux_y[:]*dtdy,1,1,NBVAR)
+                U2[i  ,j-1,:] += -flux_y[:].*dtdy
+                U2[i  ,j  ,:] +=  flux_y[:].*dtdy
             end
         end
         
@@ -429,10 +431,10 @@ function save_hdf5(U::Array{Float64,3},
 
     f = HDF5.h5open(full_filename, "w")
     
-    HDF5.write(f, "density", float64(U[:,:,ID]))
-    HDF5.write(f, "energy", float64(U[:,:,IP]))
-    HDF5.write(f, "vx", float64(U[:,:,IU]))
-    HDF5.write(f, "vy", float64(U[:,:,IV]))
+    HDF5.write(f, "density", U[:,:,ID])
+    HDF5.write(f, "energy", U[:,:,IP])
+    HDF5.write(f, "vx", U[:,:,IU])
+    HDF5.write(f, "vy", U[:,:,IV])
 
     HDF5.close(f)
 

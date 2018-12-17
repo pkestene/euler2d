@@ -225,9 +225,9 @@ function riemann_approx(qleft::Array{Float64,1},
     flux = zeros(Float64,NBVAR)
     
     # Pressure, density and velocity
-    rl = max(qleft [ID], par.smallr)
-    ul =     qleft [IU]
-    pl = max(qleft [IP], rl*par.smallp)
+    rl = max(qleft[ID] , par.smallr)
+    ul =     qleft[IU]
+    pl = max(qleft[IP] , rl*par.smallp)
     rr = max(qright[ID], par.smallr)
     ur =     qright[IU]
     pr = max(qright[IP], rr*par.smallp)
@@ -374,23 +374,24 @@ function slope_unsplit_hydro_2d(q::Array{Float64,1},
         dlft = par.slope_type*(q      - qMinusX)
         drgt = par.slope_type*(qPlusX - q      )
         dcen = 0.5 *          (qPlusX - qMinusX)
-        dsgn = sign(dcen)
-        slop = min( abs(dlft), abs(drgt) )
+        dsgn = similar(dcen); slop = similar(dlft)
+        @. dsgn = sign(dcen)
+        @. slop = min( abs(dlft), abs(drgt) )
         dlim = slop
         # mulitply by zero if negative
-        dlim .*= (sign(dlft .* drgt)+1)/2
-        dqX = dsgn .* min( dlim, abs(dcen) )
+        @. dlim *= (sign(dlft * drgt)+1)/2
+        @. dqX = dsgn * min( dlim, abs(dcen) )
         
         # slopes in second coordinate direction
         dlft = par.slope_type*(q      - qMinusY)
         drgt = par.slope_type*(qPlusY - q      )
         dcen = 0.5 *          (qPlusY - qMinusY)
-        dsgn = sign(dcen)
-        slop = min( abs(dlft), abs(drgt) )
+        @. dsgn = sign(dcen)
+        @. slop = min( abs(dlft), abs(drgt) )
         dlim = slop
         # mulitply by zero if negative
-        dlim .*= (sign(dlft .* drgt)+1)/2
-        dqY = dsgn .* min( dlim, abs(dcen) )
+        @. dlim *= (sign(dlft * drgt)+1)/2
+        @. dqY = dsgn * min( dlim, abs(dcen) )
     end
     
     return dqX, dqY

@@ -18,8 +18,10 @@ myParamParse = Hydro2d.HydroParamParse("test_implode.ini")
 Hydro2d.set_param_from_file(myParamParse)
 Hydro2d.set_other_params(myParamParse)
 
+println("############ myParamParse.dic #############")
 println(myParamParse.dic)
 
+println("############ myParamParse #############")
 Hydro2d.printConfig(myParamParse)
 
 myParam = Hydro2d.HydroParam(myParamParse)

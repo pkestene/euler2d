@@ -1,4 +1,6 @@
-using ConfParser
+import IniFile
+
+using Printf
 
 const ID=1  # ID Density field index
 const IP=2  # IP Pressure/Energy field index
@@ -31,9 +33,9 @@ const BC_COPY      = 5   # only used in MPI parallelized version
 #
 # type HydroParamParse
 #
-type HydroParamParse
+mutable struct HydroParamParse
     iniFilename::String
-    conf::ConfParse
+    conf::IniFile.Inifile
     dic::Dict
     
     # usefull Constructor
@@ -43,8 +45,8 @@ type HydroParamParse
         instance.iniFilename = filename
         try
             # take care that ConfParse only accept ASCIIString !!!
-            instance.conf = ConfParse(ASCIIString(filename))
-            ConfParser.parse_conf!(instance.conf)
+            instance.conf = IniFile.Inifile()
+            read(instance.conf, instance.iniFilename)
         catch e
             println("Failed to parsed ini file : $e")
         end
@@ -55,55 +57,66 @@ end # type HydroParamParse
 
 function get_int(paramParse::HydroParamParse,section::String,name::String, default=0)
     
+    local returned
     returned = default
     try
-        returned = parseint( ConfParser.retrieve(paramParse.conf, section, name) )
+        returned = IniFile.get_int(paramParse.conf, section, name)
     catch e
-        println("get_int failed to parse requested value :",section," ",name)
-        println("$e")
+        @printf("can't parse section %s item %s\n",section,name)
     end
+        
     return returned
 end # get_int
 
 function get_float(paramParse::HydroParamParse,section::String,name::String, default=0.0)
     
+    local returned
     returned = default
     try
-        returned = parsefloat( ConfParser.retrieve(paramParse.conf, section, name) )
+        returned = IniFile.get_float(paramParse.conf, section, name)
     catch e
-        println("get_float failed to parse requested value :",section," ",name)
-        println("$e")
+        @printf("can't parse section %s item %s\n",section,name)
     end
+    
     return returned
 end # get_float
 
 function get_bool(paramParse::HydroParamParse,section::String,name::String, default::Bool=false)
-    
+
     returned = default
+
+    local data
     try
-        data = ConfParser.retrieve(paramParse.conf, section, name)
-        if data != "yes" && data != "true" && data != "True"
-            returned = false
-        else
-            returned = true
-        end
+        data = IniFile.get(paramParse.conf, section, name, "")
+    catch e
+        @printf("can't parse section %s item %s\n",section,name)
+    end
+    
+    if data != "yes" && data != "true" && data != "True"
+        returned = false
+    else
+        returned = true
     end
     return returned
 end # get_bool
 
 function get_string(paramParse::HydroParamParse,section::String,name::String, default::String="")
-    
-    returned = default
+
+    local returned
+
     try
-        returned = ConfParser.retrieve(paramParse.conf, section, name)
-    end
+        returned = IniFile.get(paramParse.conf, section, name, default)
+    catch e
+        @printf("can't parse section %s item %s\n",section,name)
+    end        
+
     return returned
 end # get_string
 
 #
 # type HydroParam
 #
-type HydroParam
+mutable struct HydroParam
 
     # from parameter file
     tEnd::Float64
