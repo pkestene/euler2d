@@ -1,5 +1,5 @@
 # for calling gettimeofday in libc
-struct Timeval_t
+mutable struct Timeval_t
     tv_sec::Clong
     tv_usec::Cuint
 end
@@ -25,7 +25,7 @@ end
 # reset timer
 function timer_reset(t::Timer_t)
 
-    timeval = t.timevalart_time
+    timeval = t.start_time
     timeval.tv_sec = 0
     timeval.tv_usec = 0
 
