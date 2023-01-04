@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import ConfigParser
+import configparser
 import sys
 
 import numpy as np
@@ -15,10 +15,10 @@ from euler2d import hydroMonitoring
 def main(paramFilename):
 
     # parser input parameter file
-    Config = ConfigParser.ConfigParser()
+    Config = configparser.ConfigParser()
     Config.read(paramFilename)
     #print Config.sections()
-    print Config
+    print(Config)
 
     t  = 0.0
     dt = 0.0
@@ -31,7 +31,7 @@ def main(paramFilename):
 
 
     from euler2d import hydroRun
-    
+
     # create the main data structure : a hydroRun
     hr = hydroRun.hydroRun(paramFilename)
 
@@ -40,14 +40,14 @@ def main(paramFilename):
 
     # initialize time step
     dt = hr.compute_dt(0)
-    #print "dt = {}".format(dt)
+    #print("dt = {}".format(dt))
 
     # initialize boundaries
     hr.make_boundaries(0)
     hr.make_boundaries(1)
 
     # start computation
-    print "Start computation...."
+    print("Start computation....")
     hydroMonitoring.total_timer.start()
 
     # Hydrodynamics solver loop
@@ -57,7 +57,7 @@ def main(paramFilename):
         # output
         hydroMonitoring.io_timer.start()
         if nStep % hr.param.nOutput == 0:
-            print "Output results at time t={0:16.13f} step {1:05d} dt={2:13.10f}".format(t,nStep,dt)
+            print("Output results at time t={0:16.13f} step {1:05d} dt={2:13.10f}".format(t,nStep,dt))
             filename = "U_{0:03d}".format(nStep)
             if nStep % 2 == 0:
                 hydroRun.saveVTK(hr.U,  filename)
@@ -68,15 +68,15 @@ def main(paramFilename):
 
         # compute new dt
         dt =  hr.compute_dt(nStep%2)
-    
+
         # perform one step integration
         hr.godunov_unsplit(nStep, dt)
 
         # increase time
         nStep += 1
         t+=dt
-    
-    
+
+
     hydroMonitoring.total_timer.stop()
 
     # print monitoring information
@@ -84,12 +84,12 @@ def main(paramFilename):
     t_comp  = hydroMonitoring.godunov_timer.elapsed()
     t_bound = hydroMonitoring.boundaries_timer.elapsed()
     t_io    = hydroMonitoring.io_timer.elapsed()
-    print "total       time : {0:5.3f} secondes".format(t_tot)
-    print "compute     time : {0:5.3f} secondes {1:6.3f}%".format(t_comp,t_comp/t_tot*100.0)
-    print "boundaries  time : {0:5.3f} secondes {1:6.3f}%".format(t_bound,t_bound/t_tot*100.0)
-    print "io          time : {0:5.3f} secondes {1:6.3f}%".format(t_io,t_io/t_tot*100.0)
-    print "Perf             : {0:10.2f} number of cell-updates/s".format(nStep*par.isize*par.jsize/t_tot)
-  
+    print("total       time : {0:5.3f} secondes".format(t_tot))
+    print("compute     time : {0:5.3f} secondes {1:6.3f}%".format(t_comp,t_comp/t_tot*100.0))
+    print("boundaries  time : {0:5.3f} secondes {1:6.3f}%".format(t_bound,t_bound/t_tot*100.0))
+    print("io          time : {0:5.3f} secondes {1:6.3f}%".format(t_io,t_io/t_tot*100.0))
+    print("Perf             : {0:10.2f} number of cell-updates/s".format(nStep*par.isize*par.jsize/t_tot))
+
 
 # #########################
 # MAIN WITH CALLGRAPH
@@ -124,6 +124,6 @@ if __name__ == '__main__':
         paramFilename = './test_implode.ini'
 
     print('Using param {}'.format(paramFilename))
-        
+
     main(paramFilename)
     #main_with_callgraph(paramFilename)
