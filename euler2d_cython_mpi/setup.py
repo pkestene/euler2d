@@ -5,7 +5,7 @@
 
 import os, re
 import subprocess
-import commands
+#import commands
 
 from os.path import join as pjoin
 
@@ -22,7 +22,7 @@ Cython.Compiler.Options.annotate = True
 from distutils.command.clean import clean as _clean
 from distutils.dir_util import remove_tree
 
-# numpy 
+# numpy
 import numpy
 
 #from distutils.core import setup
@@ -36,8 +36,8 @@ try:
     import mpi4py
 except ImportError:
     Have_MPI = False
+    print("Please install mpi4py !")
 
-    
 compiler = 'gcc'
 #compiler = 'intel'
 if compiler == 'intel':
@@ -54,13 +54,13 @@ if Have_MPI:
     mpic = 'mpicc'
     if compiler == 'intel':
         print("WARNING: Intel compiler setup has not been tested !")
-        link_args = commands.getoutput(mpic + ' -cc=icc -link_info')
+        link_args = subprocess.getoutput(mpic + ' -cc=icc -link_info')
         link_args = link_args[3:]
-        compile_args = commands.getoutput(mpic + ' -cc=icc -compile_info')
+        compile_args = subprocess.getoutput(mpic + ' -cc=icc -compile_info')
         compile_args = compile_args[3:]
     else:
-        link_args = commands.getoutput(mpic + ' --showme:link').split()
-        compile_args = commands.getoutput(mpic + ' --showme:compile').split()
+        link_args = subprocess.getoutput(mpic + ' --showme:link').split()
+        compile_args = subprocess.getoutput(mpic + ' --showme:compile').split()
     mpi_link_args = link_args
     mpi_compile_args = compile_args
     mpi_inc_dirs.append(mpi4py.get_include())
@@ -88,15 +88,38 @@ def wselect(args,dirname,names):
         os.remove("%s/%s"%(dirname,n))
         break
 
+def remove_dir(some_dir):
+  if (os.path.exists(some_dir)): remove_tree(some_dir)
+
+def remove_files(my_pattern):
+  import glob
+  fileList = glob.glob(my_pattern)
+
+  # Iterate over the list of filepaths & remove each file.
+  for filePath in fileList:
+    try:
+      os.remove(filePath)
+    except:
+      print("Error while deleting file : ", filePath)
+
 class clean(_clean):
   def walkAndClean(self):
-    os.path.walk(".",wselect,[])
+    os.walk(".",wselect,[])
   def run(self):
-    if (os.path.exists('./build')): remove_tree('./build')
-    if (os.path.exists('./dist')):  remove_tree('./dist')
+    remove_dir("./build")
+    remove_dir("./dist")
+    remove_dir("./euler2d/__pycache__")
+    remove_files("euler2d/*.so")
+    remove_files("euler2d/*.c")
+    remove_files("euler2d/*.html")
+    remove_files("euler2d/*.pyc")
+    remove_files("test/*.so")
+    remove_files("test/*.c")
+    remove_files("test/*.html")
+    remove_files("test/*.pyc")
+    remove_files("./*.*vti")
     self.walkAndClean()
 
-   
 # --------------------------------------------------------------------
 # Build extensions
 # --------------------------------------------------------------------
@@ -106,6 +129,7 @@ setup(
     version='0.1',
     ext_modules = [
         Extension(name='test.cython_test',
+                  include_dirs = include_dirs,
                   sources=['test/cython_test.pyx']),
         Extension(name='euler2d.hydroMonitoring',
                   include_dirs = include_dirs,
@@ -122,6 +146,6 @@ setup(
                   extra_link_args=mpi_link_args,
                   extra_compile_args=mpi_compile_args,
                   sources=['euler2d/hydroRun.pyx'])
-        ],
-
-    cmdclass={'build_ext': build_ext, 'clean': clean})
+    ],
+    cmdclass={'build_ext': build_ext, 'clean': clean}
+)

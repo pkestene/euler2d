@@ -73,7 +73,7 @@ def main():
 
         dims = [TOPO_SIZE_X, TOPO_SIZE_Y]
         periods = [True] * len(dims)
-        
+
         # create the cartesian topology
         topo = MPI.COMM_WORLD.Create_cart(dims, periods=periods)
 
@@ -86,10 +86,10 @@ def main():
         # get rank of source (x-1) and destination (x+1) process
         # take care MPI uses column-major order
         nbrs[X_MINUS_1], nbrs[X_PLUS_1] = topo.Shift(MPI_TOPO_DIR_X, 1)
-        
+
         # # get rank of source (y-1) and destination (y+1) process
         nbrs[Y_MINUS_1], nbrs[Y_PLUS_1] = topo.Shift(MPI_TOPO_DIR_Y, 1)
-        
+
         # another way to get shifted process' rank using MPI_Cart_rank
         shiftedCoords = [ coords[0] - 1, coords[1] ]
         nbrs2[X_MINUS_1] = topo.Get_cart_rank(shiftedCoords)
@@ -108,7 +108,7 @@ def main():
         inbuf = np.zeros(N_NEIGHBORS_2D, dtype=np.int)
 
         data_recv = np.zeros( ( N_NEIGHBORS_2D, 1), dtype=np.int)
-        
+
         # send    my rank to   each of my neighbors
         # receive my rank from each of my neighbors
         # inbuf should contain the rank of all neighbors
@@ -127,20 +127,20 @@ def main():
         MPI.Request.Waitall(recv_request)
         for i in range(N_NEIGHBORS_2D):
             inbuf[i] = data_recv[i][0]
-        
+
         print("rank= {0:2d} coords= {1} {2}  neighbors(x+,x-,y+,y-) = {3:2d} {4:2d} {5:2d} {6:2d}".format(
             rank,
-            coords[0],coords[1], 
-            nbrs[X_PLUS_1], 
-            nbrs[X_MINUS_1], 
-            nbrs[Y_PLUS_1], 
+            coords[0],coords[1],
+            nbrs[X_PLUS_1],
+            nbrs[X_MINUS_1],
+            nbrs[Y_PLUS_1],
             nbrs[Y_MINUS_1]))
         print("rank= {0:2d} coords= {1} {2}  neighbors(x+,x-,y+,y-) = {3:2d} {4:2d} {5:2d} {6:2d}".format(
             rank,
-            coords[0],coords[1], 
-            nbrs2[X_PLUS_1], 
-            nbrs2[X_MINUS_1], 
-            nbrs2[Y_PLUS_1], 
+            coords[0],coords[1],
+            nbrs2[X_PLUS_1],
+            nbrs2[X_MINUS_1],
+            nbrs2[Y_PLUS_1],
             nbrs2[Y_MINUS_1]))
         print("rank= {0:2d} coords= {1} {2}  inbuf    (x+,x-,y+,y-) = {3:2d} {4:2d} {5:2d} {6:2d}".format(
             rank,
@@ -162,8 +162,8 @@ def main():
 
     else:
         print("Must specify {} processors. Terminating.".format(SIZE_2D))
-        
-    
+
+
 if __name__ == '__main__':
 
     main()

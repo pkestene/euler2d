@@ -4,6 +4,7 @@
 # cython: wraparound = False
 # cython: nonecheck = False
 # cython: cdivision = True
+# cython: language_level = 3
 
 # -*- coding: utf-8 -*-
 """
@@ -18,7 +19,7 @@ cimport numpy as np
 
 cimport cython
 
-import hydroParam
+from . import hydroParam
 
 cdef int ID    = hydroParam.ID
 cdef int IP    = hydroParam.IP
@@ -57,7 +58,7 @@ cdef extern from "math.h":
     double sqrt(double x)
     double fabs(double x)
     double copysign(double x, double y)
-    
+
 cdef double saturate(double a):
 
     cdef double a_sat
@@ -67,13 +68,13 @@ cdef double saturate(double a):
 
     if a >= 1.0:
         a_sat = 1.0
-        
+
     elif a <= 0:
         a_sat = 0.0
 
     else:
         a_sat = a
-        
+
     return a_sat
 
 #ctypedef np.ndarray[double, ndim=1] (*riemann_fn_ptr)(np.ndarray[double, ndim=1],
@@ -89,9 +90,9 @@ cdef class hydroUtils:
 
     #########################################
     def __init__(self, dict param):
-         
+
         cdef str riemann_solver_str
-         
+
         self.smallc     = param['smallc']
         self.smallr     = param['smallr']
         self.smallp     = param['smallp']
@@ -102,8 +103,8 @@ cdef class hydroUtils:
 
         # define a routine alias to the actual riemann solver routine
         riemann_solver_str = param['riemannSolver']
-         
-         
+
+
 #       if   riemann_solver_str == 'hllc':
 
 #          self.riemann_2d = self.riemann_hllc
@@ -119,27 +120,27 @@ cdef class hydroUtils:
 
     #########################################
     cdef eos(self, double rho, double eint, double *p, double *c):
-        
+
         """
         Equation of state:
         compute pressure p and speed of sound c, from density rho and
         internal energy eint (per mass unit) using the "calorically perfect gas"
-        equation of state : 
+        equation of state :
         .. math::
             eint=\frac{p}{\rho (\gamma-1)}
-            
+
         Recall that gamma is equal to the ratio of specific heats c_p/c_v.
         """
         #cdef double p, c
         #cdef EOS_out output
-         
+
         p[0] = fmax((self.gamma0 - 1.0) * rho * eint, rho * self.smallp)
         c[0] = sqrt(self.gamma0 * p[0] / rho)
-     
+
     #########################################
     cdef computePrimitives(self, double* u, double* q, double *c):
         """
-        Convert conservative variables (rho, rho*u, rho*v, e) to 
+        Convert conservative variables (rho, rho*u, rho*v, e) to
         primitive variables (rho,u,v,p)
         :param[in]  u:  conservative variables array
         :param[out] q:  primitive variables array
@@ -147,16 +148,16 @@ cdef class hydroUtils:
         """
         cdef double eken, e
         cdef int ID =0
-         
+
         q[ID] = fmax(u[ID], self.smallr)
         q[IU] = u[IU] / q[ID]
         q[IV] = u[IV] / q[ID]
- 
+
         eken = 0.5 * (q[IU] * q[IU] + q[IV] * q[IV])
         e    = u[IP] / q[ID] - eken
         if e < 0:
-            print "FATAL ERROR : hydro eint < 0  : e % eken % d % u % v %".format(u[IP],eken,u[ID],u[IU],u[IV])
- 
+            print("FATAL ERROR : hydro eint < 0  : e % eken % d % u % v %".format(u[IP],eken,u[ID],u[IU],u[IV]))
+
         # compute pressure and speed of sound
         #cdef EOS_out output
         self.eos(q[ID], e, &(q[IP]), c)
@@ -169,18 +170,18 @@ cdef class hydroUtils:
                                       np.ndarray[double, ndim=1] qLoc):
 
         """
-        Convert conservative variables (rho, rho*u, rho*v, e) to 
+        Convert conservative variables (rho, rho*u, rho*v, e) to
         primitive variables (rho,u,v,p)
         :param  U:  conservative variables (2D array)
         :param  i:  x-coordinate of current cell
         :param  j:    y-coordinate of current cell
-        :returns:  qLoc (primitive variables of current cell) and 
+        :returns:  qLoc (primitive variables of current cell) and
         c (speed of sound)
         """
         cdef np.ndarray[double, ndim=1] uLoc = np.zeros(NBVAR, dtype=np.double)
 
         cdef double eken, e, c
-         
+
         # get primitive variables in current cell
         uLoc[ID] = U[i,j,ID]
         uLoc[IP] = U[i,j,IP]
@@ -197,16 +198,16 @@ cdef class hydroUtils:
         eken = 0.5 * (qLoc[IU] * qLoc[IU] + qLoc[IV] * qLoc[IV])
         e    = uLoc[IP] / qLoc[ID] - eken
         if e < 0:
-            print "FATAL ERROR at {},{}: hydro eint < 0  : e {} eken {} d {} u {} v {}".format(i,j,uLoc[IP],eken,uLoc[ID],uLoc[IU],uLoc[IV])
-            
+            print("FATAL ERROR at {},{}: hydro eint < 0  : e {} eken {} d {} u {} v {}".format(i,j,uLoc[IP],eken,uLoc[ID],uLoc[IU],uLoc[IV]))
+
         # compute pressure and speed of sound
         #qLoc[IP], c = self.eos(qLoc[ID], e)
         #cdef EOS_out output = self.eos(qLoc[ID], e)
         #cdef EOS_out output
         self.eos(qLoc[ID], e, &(qLoc[IP]), &c)
-         
+
         return c
-        
+
     #########################################
     cdef cmpflx(self, double[4] qgdnv, double[4] flux):
         """
@@ -214,43 +215,43 @@ cdef class hydroUtils:
         :param: qgdnv (input)
         :param: flux (output)
         """
-        
+
         # Compute fluxes
         # Mass density
         flux[ID] = qgdnv[ID] * qgdnv[IU]
-    
+
         # Normal momentum
         flux[IU] = flux[ID] * qgdnv[IU] + qgdnv[IP]
-      
+
         # Transverse momentum
         flux[IV] = flux[ID] * qgdnv[IV]
 
         # Total energy
         cdef double entho = 1.0 / (self.gamma0 - 1.0)
-    
+
         cdef double ekin = 0.5 * qgdnv[ID] * (qgdnv[IU]*qgdnv[IU] + qgdnv[IV]*qgdnv[IV])
-      
+
         cdef double etot = qgdnv[IP] * entho + ekin
         flux[IP] = qgdnv[IU] * (etot + qgdnv[IP])
-    
-        
+
+
     #########################################
     cdef slope_unsplit_hydro_2d(self,
                                 double[4] q,
                                 double[4][4] qNeighbors,
                                 double[4] dqX,
                                 double[4] dqY):
-        
+
         """
         Compute primitive variables slope (vector dq) from q and its neighbors.
         This routine is only used in the 2D UNSPLIT integration and slope_type = 0,1 and 2.
-        
+
         Only slope_type 1 and 2 are supported.
-        
+
         :param  q           : current primitive variable state
         :param  qNeighbors  : states in the neighboring cells along XDIR and YDIR
         #:returns: dqX,dqY : array of X and Y slopes
-        """        
+        """
 
         cdef double* qPlusX  = qNeighbors[0]
         cdef double* qMinusX = qNeighbors[1]
@@ -263,13 +264,13 @@ cdef class hydroUtils:
         cdef double[4] dsgn
         cdef double[4] slop
         cdef double[4] dlim
-        
+
         cdef int ivar
-         
+
         if self.slope_type==1 or self.slope_type==2:  # minmod or average
-    
+
             for ivar in range(NBVAR):
-             
+
                 # slopes in first coordinate direction
                 dlft[ivar] = self.slope_type*(q[ivar]      - qMinusX[ivar])
                 drgt[ivar] = self.slope_type*(qPlusX[ivar] - q[ivar]      )
@@ -281,7 +282,7 @@ cdef class hydroUtils:
                 if dlft[ivar]*drgt[ivar] <= 0.0:
                     dlim[ivar] = 0.0
                 dqX[ivar] = dsgn[ivar] * fmin( dlim[ivar], fabs(dcen[ivar]) )
-      
+
                 # slopes in second coordinate direction
                 dlft[ivar] = self.slope_type*(q[ivar]      - qMinusY[ivar])
                 drgt[ivar] = self.slope_type*(qPlusY[ivar] - q[ivar]      )
@@ -303,10 +304,10 @@ cdef class hydroUtils:
                           double dtdy,
                           double[2][4] qm,
                           double[2][4] qp):
-       
+
         """
         Trace computations for unsplit Godunov scheme.
- 
+
         :param q          : Primitive variables state.
         :param qNeighbors : state in the neighbor cells (2 neighbors
         per dimension, in the following order x+, x-, y+, y-, z+, z-)
@@ -319,66 +320,66 @@ cdef class hydroUtils:
         # first compute slopes
         cdef double[4] dqX
         cdef double[4] dqY
-        
+
         cdef double r, p, u, v
         cdef double drx, dpx, dux, dvx
         cdef double dry, dpy, duy, dvy
         cdef double sr0, sp0, su0, sv0
-                
+
         #dqX, dqY = self.slope_unsplit_hydro_2d(q, qNeighbors)
         self.slope_unsplit_hydro_2d(q, qNeighbors, dqX, dqY)
-          
+
         # Cell centered values
         r =  q[ID]
         p =  q[IP]
         u =  q[IU]
         v =  q[IV]
-          
+
         # TVD slopes in all directions
         drx = dqX[ID]
         dpx = dqX[IP]
         dux = dqX[IU]
         dvx = dqX[IV]
-          
+
         dry = dqY[ID]
         dpy = dqY[IP]
         duy = dqY[IU]
         dvy = dqY[IV]
-          
+
         # source terms (with transverse derivatives)
         sr0 = -u*drx-v*dry - (dux+dvy)*r
         sp0 = -u*dpx-v*dpy - (dux+dvy)*self.gamma0*p
         su0 = -u*dux-v*duy - (dpx    )/r
         sv0 = -u*dvx-v*dvy - (dpy    )/r
-          
+
         # Right state at left interface
         qp[IX][ID] = r - 0.5*drx + sr0*dtdx*0.5
         qp[IX][IP] = p - 0.5*dpx + sp0*dtdx*0.5
         qp[IX][IU] = u - 0.5*dux + su0*dtdx*0.5
         qp[IX][IV] = v - 0.5*dvx + sv0*dtdx*0.5
         qp[IX][ID] = fmax(self.smallr, qp[IX][ID])
-          
+
         # Left state at right interface
         qm[IX][ID] = r + 0.5*drx + sr0*dtdx*0.5
         qm[IX][IP] = p + 0.5*dpx + sp0*dtdx*0.5
         qm[IX][IU] = u + 0.5*dux + su0*dtdx*0.5
         qm[IX][IV] = v + 0.5*dvx + sv0*dtdx*0.5
         qm[IX][ID] = fmax(self.smallr, qm[IX][ID])
-          
+
         # Top state at bottom interface
         qp[IY][ID] = r - 0.5*dry + sr0*dtdy*0.5
         qp[IY][IP] = p - 0.5*dpy + sp0*dtdy*0.5
         qp[IY][IU] = u - 0.5*duy + su0*dtdy*0.5
         qp[IY][IV] = v - 0.5*dvy + sv0*dtdy*0.5
         qp[IY][ID] = fmax(self.smallr, qp[IY][ID])
-          
+
         # Bottom state at top interface
         qm[IY][ID] = r + 0.5*dry + sr0*dtdy*0.5
         qm[IY][IP] = p + 0.5*dpy + sp0*dtdy*0.5
         qm[IY][IU] = u + 0.5*duy + su0*dtdy*0.5
         qm[IY][IV] = v + 0.5*dvy + sv0*dtdy*0.5
         qm[IY][ID] = fmax(self.smallr, qm[IY][ID])
-  
+
 
     #########################################
     cdef trace_unsplit_hydro_2d(self,
@@ -389,7 +390,7 @@ cdef class hydroUtils:
                                 double dtdy,
                                 double[2][4] qm,
                                 double[2][4] qp):
-                          
+
         # Cell centered values
         cdef double r = q[ID]
         cdef double p = q[IP]
@@ -401,7 +402,7 @@ cdef class hydroUtils:
         cdef double dpx = dqX[IP] * 0.5
         cdef double dux = dqX[IU] * 0.5
         cdef double dvx = dqX[IV] * 0.5
-  
+
         # Cell centered TVD slopes in Y direction
         cdef double dry = dqY[ID] * 0.5
         cdef double dpy = dqY[IP] * 0.5
@@ -413,7 +414,7 @@ cdef class hydroUtils:
         cdef double sr0 = (-u*drx-dux*r)            *dtdx + (-v*dry-dvy*r)            *dtdy
         cdef double su0 = (-u*dux-dpx/r)            *dtdx + (-v*duy      )            *dtdy
         cdef double sv0 = (-u*dvx      )            *dtdx + (-v*dvy-dpy/r)            *dtdy
-        cdef double sp0 = (-u*dpx-dux*self.gamma0*p)*dtdx + (-v*dpy-dvy*self.gamma0*p)*dtdy    
+        cdef double sp0 = (-u*dpx-dux*self.gamma0*p)*dtdx + (-v*dpy-dvy*self.gamma0*p)*dtdy
         # end cartesian
 
         # Update in time the  primitive variables
@@ -429,7 +430,7 @@ cdef class hydroUtils:
         qp[IX][IP] = p - dpx
         qp[IX][ID] = fmax(self.smallr,  qp[IX][ID])
         qp[IX][IP] = fmax(self.smallp * qp[IX][ID], qp[IX][IP])
-  
+
         # Face averaged left state at right interface
         qm[IX][ID] = r + drx
         qm[IX][IU] = u + dux
@@ -445,7 +446,7 @@ cdef class hydroUtils:
         qp[IY][IP] = p - dpy
         qp[IY][ID] = fmax(self.smallr,  qp[IY][ID])
         qp[IY][IP] = fmax(self.smallp * qp[IY][ID], qp[IY][IP])
-  
+
         # Face averaged bottom state at top interface
         qm[IY][ID] = r + dry
         qm[IY][IU] = u + duy
@@ -465,7 +466,7 @@ cdef class hydroUtils:
                                              double[4] qface):
 
         """ Returns a reconstructed state qface corresponding to faceId."""
-        
+
         # Cell centered values
         cdef double r = q[ID]
         cdef double p = q[IP]
@@ -477,7 +478,7 @@ cdef class hydroUtils:
         cdef double dpx = dqX[IP] * 0.5
         cdef double dux = dqX[IU] * 0.5
         cdef double dvx = dqX[IV] * 0.5
-  
+
         # Cell centered TVD slopes in Y direction
         cdef double dry = dqY[ID] * 0.5
         cdef double dpy = dqY[IP] * 0.5
@@ -489,7 +490,7 @@ cdef class hydroUtils:
         cdef double sr0 = (-u*drx-dux*r)            *dtdx + (-v*dry-dvy*r)            *dtdy
         cdef double su0 = (-u*dux-dpx/r)            *dtdx + (-v*duy      )            *dtdy
         cdef double sv0 = (-u*dvx      )            *dtdx + (-v*dvy-dpy/r)            *dtdy
-        cdef double sp0 = (-u*dpx-dux*self.gamma0*p)*dtdx + (-v*dpy-dvy*self.gamma0*p)*dtdy    
+        cdef double sp0 = (-u*dpx-dux*self.gamma0*p)*dtdx + (-v*dpy-dvy*self.gamma0*p)*dtdy
         # end cartesian
 
         # Update in time the  primitive variables
@@ -536,25 +537,25 @@ cdef class hydroUtils:
 
     #########################################
     cdef riemann_2d(self,
-                     double* qleft, 
+                     double* qleft,
                      double* qright,
                      double* flux):
-                          
-        self.riemann_approx(qleft, qright, flux)                                      
-                          
+
+        self.riemann_approx(qleft, qright, flux)
+
 
     #########################################
-    cdef riemann_approx(self, 
-                        double* qleft, 
+    cdef riemann_approx(self,
+                        double* qleft,
                         double* qright,
                         double* flux):
         """
         Riemann solver, equivalent to riemann_approx in RAMSES (see file
         godunov_utils.f90 in RAMSES).
         """
-        
+
         cdef double[4] qgdnv
-   
+
         # Pressure, density and velocity
         cdef double rl = fmax(qleft [ID], self.smallr)
         cdef double ul =      qleft [IU]
@@ -562,11 +563,11 @@ cdef class hydroUtils:
         cdef double rr = fmax(qright[ID], self.smallr)
         cdef double ur =      qright[IU]
         cdef double pr = fmax(qright[IP], rr*self.smallp)
-  
+
         # Lagrangian sound speed
         cdef double cl = self.gamma0*pl*rl
         cdef double cr = self.gamma0*pr*rr
-  
+
         # First guess
         cdef double wl = sqrt(cl)
         cdef double wr = sqrt(cr)
@@ -579,7 +580,7 @@ cdef class hydroUtils:
         cdef int niter_riemann=100
         cdef double wwl, wwr, ql, qr, usl, usr, delp
         while (iter < niter_riemann) and (conv > 1e-6):
-    
+
             wwl = sqrt(cl*(1.0+self.gamma6*(pold-pl)/pl))
             wwr = sqrt(cr*(1.0+self.gamma6*(pold-pr)/pr))
             ql = 2.0*wwl*wwl*wwl/(wwl*wwl+cl)
@@ -587,24 +588,24 @@ cdef class hydroUtils:
             usl = ul-(pold-pl)/wwl
             usr = ur+(pold-pr)/wwr
             delp = fmax(qr*ql/(qr+ql)*(usl-usr),-pold)
-          
+
             pold = pold+delp
             conv = fabs(delp/(pold+self.smallpp))	 # Convergence indicator
             iter += 1
-    
+
         # Star region pressure
         # for a two-shock Riemann problem
         pstar = pold
         wl = sqrt(cl*(1.0+self.gamma6*(pstar-pl)/pl))
         wr = sqrt(cr*(1.0+self.gamma6*(pstar-pr)/pr))
-          
+
         # Star region velocity
         # for a two shock Riemann problem
         ustar = 0.5 * (ul + (pl-pstar)/wl + ur - (pr-pstar)/wr)
-      
+
         # Left going or right going contact wave
         sgnm = copysign(1.0, ustar)
-      
+
         # Left or right unperturbed state
         cdef double ro, uo, po, wo
         if sgnm > 0.0:
@@ -617,20 +618,20 @@ cdef class hydroUtils:
             uo = ur
             po = pr
             wo = wr
-    
+
         co = fmax(self.smallc, sqrt(fabs(self.gamma0*po/ro)))
-  
+
         # Star region density (Shock, max prevents vacuum formation in star region)
         rstar = fmax( (ro/(1.0+ro*(po-pstar)/(wo*wo))), self.smallr)
         # Star region sound speed
         cstar = fmax(self.smallc, sqrt(fabs(self.gamma0*pstar/rstar)))
-  
+
         # Compute rarefaction head and tail speed
         spout  = co    - sgnm*uo
         spin   = cstar - sgnm*ustar
         # Compute shock speed
         ushock = wo/ro - sgnm*uo
-  
+
         if pstar >= po:
             spin  = ushock
             spout = ushock
@@ -643,38 +644,38 @@ cdef class hydroUtils:
             frac = 0.0
         else:
             frac = saturate(frac)
-  
+
         qgdnv[ID] = frac*rstar + (1.0-frac)*ro
         qgdnv[IU] = frac*ustar + (1.0-frac)*uo
         qgdnv[IP] = frac*pstar + (1.0-frac)*po
-  
+
         if spout < 0.0:
             qgdnv[ID] = ro
             qgdnv[IU] = uo
             qgdnv[IP] = po
-  
+
         if spin > 0.0:
             qgdnv[ID] = rstar
             qgdnv[IU] = ustar
             qgdnv[IP] = pstar
-  
+
         # transverse velocity
         if sgnm > 0.0:
             qgdnv[IV] = qleft[IV]
         else:
             qgdnv[IV] = qright[IV]
-    
-  
+
+
         self.cmpflx(qgdnv, flux)
-        
+
     #########################################
-    cdef riemann_hllc(self, 
-                      double* qleft, 
+    cdef riemann_hllc(self,
+                      double* qleft,
                       double* qright,
                       double* flux):
         """
         Riemann solver HLLC.
-        
+
         :param: qleft (input)
         :param: qright (input)
         :param: flux (output)
@@ -682,12 +683,12 @@ cdef class hydroUtils:
 
         # enthalpy
         cdef double entho = 1.0 / (self.gamma0 - 1.0)
-        
+
         # Left variables
         cdef double rl = fmax(qleft[ID], self.smallr)
         cdef double pl = fmax(qleft[IP], rl*self.smallp)
         cdef double ul =      qleft[IU]
-    
+
         cdef double ecinl  = 0.5*rl*ul*ul
         ecinl += 0.5*rl*qleft[IV]*qleft[IV]
 
@@ -701,10 +702,10 @@ cdef class hydroUtils:
 
         cdef double ecinr =  0.5*rr*ur*ur
         ecinr += 0.5*rr*qright[IV]*qright[IV]
-  
+
         cdef double etotr = pr*entho+ecinr
         cdef double ptotr = pr
-    
+
         # Find the largest eigenvalues in the normal direction to the interface
         cdef double cfastl = sqrt(fmax(self.gamma0*pl/rl,self.smallc**2))
         cdef double cfastr = sqrt(fmax(self.gamma0*pr/rr,self.smallc**2))
@@ -716,7 +717,7 @@ cdef class hydroUtils:
         # Compute lagrangian sound speed
         cdef double rcl = rl*(ul-SL)
         cdef double rcr = rr*(SR-ur)
-    
+
         # Compute acoustic star state
         cdef double ustar    = (rcr*ur   +rcl*ul   +  (ptotl-ptotr))/(rcr+rcl)
         cdef double ptotstar = (rcr*ptotl+rcl*ptotr+rcl*rcr*(ul-ur))/(rcr+rcl)
@@ -724,13 +725,13 @@ cdef class hydroUtils:
         # Left star region variables
         cdef double rstarl    = rl*(SL-ul)/(SL-ustar)
         cdef double etotstarl = ((SL-ul)*etotl-ptotl*ul+ptotstar*ustar)/(SL-ustar)
-    
+
         # Right star region variables
         cdef double rstarr    = rr*(SR-ur)/(SR-ustar)
         cdef double etotstarr = ((SR-ur)*etotr-ptotr*ur+ptotstar*ustar)/(SR-ustar)
-    
+
         # Sample the solution at x/t=0
-        cdef double ro, uo, ptoto, etoto         
+        cdef double ro, uo, ptoto, etoto
         if SL > 0.0:
             ro=rl
             uo=ul
@@ -760,4 +761,3 @@ cdef class hydroUtils:
             flux[IV] = flux[ID]*qleft[IV]
         else:
             flux[IV] = flux[ID]*qright[IV]
-  

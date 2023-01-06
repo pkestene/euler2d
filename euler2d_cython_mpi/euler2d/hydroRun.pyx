@@ -4,6 +4,7 @@
 # cython: wraparound = False
 # cython: nonecheck = False
 # cython: cdivision = True
+# cython: language_level = 3
 
 # -*- coding: utf-8 -*-
 """
@@ -31,10 +32,40 @@ cimport numpy as np
 
 cimport cython
 
-import hydroParam
-cimport hydroUtils
+from . import hydroParam as hp
+cimport euler2d.hydroUtils as hydroUtils
 
-import hydroMonitoring
+from . import hydroMonitoring
+
+
+# test if vtk module is available
+try:
+    import vtk
+    from vtk.util.numpy_support import vtk_to_numpy
+    from vtk.util import numpy_support
+    vtkModuleFound = True
+except ImportError:
+    vtkModuleFound = False
+
+# test if tvtk module is available
+# Example of use:
+# see http://docs.enthought.com/mayavi/mayavi/auto/example_datasets.html
+# see http://stackoverflow.com/questions/20035620/save-data-to-vtk-using-python-and-tvtk-with-more-than-one-vector-field
+try:
+    from tvtk.api import tvtk
+    from tvtk.api import write_data as tvtk_write_data
+    tvtkModuleFound = True
+except ImportError:
+    tvtkModuleFound = False
+
+# test if pyEVTK is available
+# See https://bitbucket.org/pauloh/pyevtk
+try:
+    import evtk
+    evtkModuleFound = True
+except:
+    evtkModuleFound = False
+
 
 cdef extern from "math.h":
     bint isnan(double x)
@@ -50,26 +81,26 @@ from libc.stdio cimport *
 #    FILE *fopen(const char *, const char *)
 #    int fclose(FILE *)
 #    void  fprintf(FILE* f, char* s, char* s)
-    
-cdef int ID    = hydroParam.ID
-cdef int IP    = hydroParam.IP
-cdef int IU    = hydroParam.IU
-cdef int IV    = hydroParam.IV
 
-cdef int NBVAR = hydroParam.NBVAR
+cdef int ID    = hp.ID
+cdef int IP    = hp.IP
+cdef int IU    = hp.IU
+cdef int IV    = hp.IV
 
-cdef int FACE_XMIN = hydroParam.FACE_XMIN
-cdef int FACE_XMAX = hydroParam.FACE_XMAX
-cdef int FACE_YMIN = hydroParam.FACE_YMIN
-cdef int FACE_YMAX = hydroParam.FACE_YMAX
+cdef int NBVAR = hp.NBVAR
 
-cdef int IX    = hydroParam.IX
-cdef int IY    = hydroParam.IY
+cdef int FACE_XMIN = hp.FACE_XMIN
+cdef int FACE_XMAX = hp.FACE_XMAX
+cdef int FACE_YMIN = hp.FACE_YMIN
+cdef int FACE_YMAX = hp.FACE_YMAX
 
-cdef int BC_DIRICHLET = hydroParam.BC_DIRICHLET
-cdef int BC_NEUMANN   = hydroParam.BC_NEUMANN
-cdef int BC_PERIODIC  = hydroParam.BC_PERIODIC
-cdef int BC_COPY      = hydroParam.BC_COPY
+cdef int IX    = hp.IX
+cdef int IY    = hp.IY
+
+cdef int BC_DIRICHLET = hp.BC_DIRICHLET
+cdef int BC_NEUMANN   = hp.BC_NEUMANN
+cdef int BC_PERIODIC  = hp.BC_PERIODIC
+cdef int BC_COPY      = hp.BC_COPY
 
 cdef bytes varNames(int iVar):
      if iVar==ID:
@@ -108,7 +139,7 @@ cdef class hydroRun:
 
     ########################################################
     def __cinit__(self, dict param):
-               
+
         self.param = param
 
         self.utils = hydroUtils.hydroUtils(self.param)
@@ -138,7 +169,7 @@ cdef class hydroRun:
         self.boundary_type_ymin = param['boundary_type_ymin']
         self.boundary_type_ymax = param['boundary_type_ymax']
 
-        
+
         # define workspace
         self.U  = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
         self.U2 = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
@@ -150,12 +181,12 @@ cdef class hydroRun:
             self.Qm_y = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
             self.Qp_x = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
             self.Qp_y = np.zeros((self.isize,self.jsize,NBVAR), dtype=np.double)
-  
+
     ########################################################
     def init_condition(self):
-        
+
         if self.problem == "implode":
-                       
+
             self.init_implode(self.U)
             self.init_implode(self.U2)
 
@@ -163,10 +194,10 @@ cdef class hydroRun:
 
             self.init_blast(self.U)
             self.init_blast(self.U2)
-            
+
         else:
 
-            print "Problem : % is not recognized / implemented ...".format(self.problem)
+            print("Problem : % is not recognized / implemented ...".format(self.problem))
 
     ########################################################
     cdef init_implode(self, np.ndarray[double, ndim=3] U):
@@ -187,15 +218,15 @@ cdef class hydroRun:
         cdef int my = self.my
 
         cdef int gw = self.gw
-        
-        for j in xrange(0,self.jsize):
-            for i in xrange(0,self.isize):
+
+        for j in range(0,self.jsize):
+            for i in range(0,self.isize):
 
                 # cartesian coordinate of current cell in global grid
                 iGlob = i + iProc*nx
                 jGlob = j + jProc*ny
                 tmp = 1.0*(iGlob-gw)/(nx*mx) + 1.0*(jGlob-gw)/(ny*my)
-                
+
                 if tmp>0.65:
                     U[i,j,ID] = 1.0
                     U[i,j,IP] = 1.0/(self.gamma0-1.0)
@@ -228,15 +259,15 @@ cdef class hydroRun:
 
         cdef int gw = self.gw
 
-        cdef double center_x = self.param['center_x'] 
+        cdef double center_x = self.param['center_x']
         cdef double center_y = self.param['center_y']
         cdef double density_in = self.param['density_in']
         cdef double density_out = self.param['density_out']
         cdef double pressure_in = self.param['pressure_in']
         cdef double pressure_out = self.param['pressure_out']
 
-        for j in xrange(0,self.jsize):
-            for i in xrange(0,self.isize):
+        for j in range(0,self.jsize):
+            for i in range(0,self.isize):
 
                 # cartesian coordinate of current cell in global grid
                 iGlob = i + iProc*nx
@@ -253,12 +284,12 @@ cdef class hydroRun:
                     U[i,j,IP] = pressure_out/(self.gamma0-1.0)
                     U[i,j,IU] = 0.0
                     U[i,j,IV] = 0.0
-                    
+
     ########################################################
     cpdef double compute_dt(self, int useU):
         """
         Compute time step satisfying CFL condition.
-        
+
         :param useU: specify which hydrodynamics data array
         :returns: dt time step
         """
@@ -269,24 +300,24 @@ cdef class hydroRun:
         cdef double[4] qLoc
 
         cdef MPI.Comm comm = MPI.COMM_WORLD
-        #cdef mpic.MPI_Comm comm_c = comm.ob_mpi 
+        #cdef mpic.MPI_Comm comm_c = comm.ob_mpi
 
         #cdef np.ndarray dt = np.array( [0.0], dtype=np.float64 )
         #cdef np.ndarray dt_global = np.array( [0.0], dtype=np.float64 )
         cdef double dt
-                    
+
         if useU == 0:
             U = self.U
         else:
             U = self.U2
-            
+
         invDt = 0.0
         dx = self.dx
         dy = self.dy
 
         hydroMonitoring.dt_timer.start()
-        for j in xrange(0,self.jsize):
-            for i in xrange(0,self.isize):
+        for j in range(0,self.jsize):
+            for i in range(0,self.isize):
 
                 for ivar in range(NBVAR):
                     uLoc[ivar] = U[i,j,ivar]
@@ -306,13 +337,13 @@ cdef class hydroRun:
         #comm.Allreduce(dt, dt_global, op=MPI.MIN)
         dt_global = comm.allreduce(dt, op=MPI.MIN)
         hydroMonitoring.dt_timer.stop()
-        
+
         return dt_global
 
     ########################################################
     ########################################################
     ## Fill ghost cells according to border condition :
-    ## absorbant, reflexive (no MPI comm required) 
+    ## absorbant, reflexive (no MPI comm required)
     ## periodic border conditions are done by default by
     ## make_boundaries_internal
     ########################################################
@@ -320,33 +351,33 @@ cdef class hydroRun:
         """
         Fill ghost boundaries.
         """
-        
+
         cdef double[:,:,:] U
         cdef int b_xmin, b_xmax, b_ymin, b_ymax
         cdef int nx, ny, mx, my, i0, j0, i, j, iVar, gw
         cdef int iProc, jProc
         cdef int imin, imax, jmin, jmax
         cdef double sign
-        
+
         if useU == 0:
             U = self.U
         else:
             U = self.U2
-        
-        b_xmin = self.boundary_type_xmin 
+
+        b_xmin = self.boundary_type_xmin
         b_xmax = self.boundary_type_xmax
-        b_ymin = self.boundary_type_ymin 
-        b_ymax = self.boundary_type_ymax 
+        b_ymin = self.boundary_type_ymin
+        b_ymax = self.boundary_type_ymax
 
         nx = self.nx
         ny = self.ny
 
         mx = self.mx
         my = self.my
-    
+
         iProc = self.iProc
         jProc = self.jProc
-        
+
         imin = self.imin
         imax = self.imax
         jmin = self.jmin
@@ -360,8 +391,8 @@ cdef class hydroRun:
 
         # boundary xmin
         if iProc==0:
-            for iVar in xrange(NBVAR):
-                for i in xrange(gw):
+            for iVar in range(NBVAR):
+                for i in range(gw):
                     sign = 1.0
                     if   b_xmin == BC_DIRICHLET:
                         i0 = 2*gw-1-i
@@ -372,14 +403,14 @@ cdef class hydroRun:
                     else: # periodic
                         i0 = nx+i
 
-                    for j in xrange(jmin, jmax):
+                    for j in range(jmin, jmax):
                         U[i,j,iVar] = U[i0,j,iVar]*sign
 
 
         # boundary xmax
         if iProc==mx-1:
-            for iVar in xrange(NBVAR):
-                for i in xrange (nx+gw, nx+2*gw):
+            for iVar in range(NBVAR):
+                for i in range (nx+gw, nx+2*gw):
                     sign = 1.0
                     if b_xmax == BC_DIRICHLET:
                         i0 = 2*nx + 2*gw-1-i
@@ -389,14 +420,14 @@ cdef class hydroRun:
                         i0 = nx+gw-1
                     else:  # periodic
                         i0 = i-nx
-                
-                    for j in xrange(jmin, jmax):
+
+                    for j in range(jmin, jmax):
                         U[i,j,iVar] = U[i0,j,iVar]*sign
-  
+
         # boundary ymin
         if jProc==0:
-            for iVar in xrange(NBVAR):
-                for j in xrange(gw):
+            for iVar in range(NBVAR):
+                for j in range(gw):
                     sign = 1.0
                     if b_ymin == BC_DIRICHLET:
                         j0 = 2*gw-1-j
@@ -406,14 +437,14 @@ cdef class hydroRun:
                         j0 = gw
                     else:  # periodic
                         j0 = ny+j
-        
-                    for i in xrange(imin, imax):
+
+                    for i in range(imin, imax):
                         U[i,j,iVar] =  U[i,j0,iVar]*sign
-        
+
         # boundary ymax
         if jProc==my-1:
-            for iVar in xrange(NBVAR):
-                for j in xrange(ny+gw, ny+2*gw):
+            for iVar in range(NBVAR):
+                for j in range(ny+gw, ny+2*gw):
                     sign = 1.0
                     if b_ymax == BC_DIRICHLET:
                         j0 = 2*ny+2*gw-1-j
@@ -423,8 +454,8 @@ cdef class hydroRun:
                         j0 = ny+gw-1
                     else:  # periodic
                         j0 = j-ny
-        
-                    for i in xrange(imin, imax):
+
+                    for i in range(imin, imax):
                         U[i,j,iVar] = U[i,j0,iVar]*sign
 
     ##########################################################
@@ -454,7 +485,7 @@ cdef class hydroRun:
 
         cdef int isize = self.isize
         cdef int jsize = self.jsize
-        
+
         cdef int gw = self.gw
 
         cdef int neighborRankSend=0
@@ -504,13 +535,13 @@ cdef class hydroRun:
         # boundary XMIN / XMAX backward
         #
         # copy border XMIN
-        for iVar in xrange(NBVAR):
-            for j in xrange(jsize):
-                for i in xrange(gw):
+        for iVar in range(NBVAR):
+            for j in range(jsize):
+                for i in range(gw):
                     offset = gw
                     sendBorderBufX[i,j,iVar] = U[i+offset,j,iVar]
 
-  
+
         # send to   neighbor iProc-1,jProc
         # recv from neighbor iProc+1,jProc
         neighborRankSend = iProcm1 + jProc*mx
@@ -518,11 +549,11 @@ cdef class hydroRun:
         sendTag = recvTag = 111
         comm.Sendrecv(sendBorderBufX, neighborRankSend, sendTag,
                       recvBorderBufX, neighborRankRecv, recvTag)
-  
+
         # update border XMAX
-        for iVar in xrange(NBVAR):
-            for j in xrange(jsize):
-                for i in xrange(gw):
+        for iVar in range(NBVAR):
+            for j in range(jsize):
+                for i in range(gw):
                     offset = isize-gw
                     U[i+offset,j,iVar] = recvBorderBufX[i,j,iVar]
 
@@ -530,9 +561,9 @@ cdef class hydroRun:
         # boundary XMIN/ XMAX forward
         #
         # copy border XMAX
-        for iVar in xrange(NBVAR):
-            for j in xrange(jsize):
-                for i in xrange(gw):
+        for iVar in range(NBVAR):
+            for j in range(jsize):
+                for i in range(gw):
                     offset = isize-2*gw
                     sendBorderBufX[i,j,iVar] = U[i+offset,j,iVar]
 
@@ -543,11 +574,11 @@ cdef class hydroRun:
         sendTag = recvTag = 111
         comm.Sendrecv(sendBorderBufX, neighborRankSend, sendTag,
                       recvBorderBufX, neighborRankRecv, recvTag)
-  
+
         # update border XMIN
-        for iVar in xrange(NBVAR):
-            for j in xrange(jsize):
-                for i in xrange(gw):
+        for iVar in range(NBVAR):
+            for j in range(jsize):
+                for i in range(gw):
                     offset = 0
                     U[i+offset,j,iVar] = recvBorderBufX[i,j,iVar]
 
@@ -557,12 +588,12 @@ cdef class hydroRun:
         # boundary YMIN / YMAX backward
         #
         # copy border YMIN
-        for iVar in xrange(NBVAR):
-            for j in xrange(gw):
-                for i in xrange(isize):
+        for iVar in range(NBVAR):
+            for j in range(gw):
+                for i in range(isize):
                     offset = gw
                     sendBorderBufY[i,j,iVar] = U[i,j+offset,iVar]
-  
+
         # send to   neighbor iProc,jProc-1
         # recv from neighbor iProc,jProc+1
         neighborRankSend = iProc + jProcm1*mx
@@ -570,21 +601,21 @@ cdef class hydroRun:
         sendTag = recvTag = 211
         comm.Sendrecv(sendBorderBufY, neighborRankSend, sendTag,
                       recvBorderBufY, neighborRankRecv, recvTag)
-  
+
         # update border YMAX
-        for iVar in xrange(NBVAR):
-            for j in xrange(gw):
-                for i in xrange(isize):
+        for iVar in range(NBVAR):
+            for j in range(gw):
+                for i in range(isize):
                     offset = jsize-gw
                     U[i,j+offset,iVar] = recvBorderBufY[i,j,iVar]
-  
+
         #
         # boundary YMIN / YMAX forward
         #
         # copy border YMAX
-        for iVar in xrange(NBVAR):
-            for j in xrange(gw):
-                for i in xrange(isize):
+        for iVar in range(NBVAR):
+            for j in range(gw):
+                for i in range(isize):
                     offset = jsize-2*gw
                     sendBorderBufY[i,j,iVar] = U[i,j+offset,iVar]
 
@@ -595,15 +626,15 @@ cdef class hydroRun:
         sendTag = recvTag = 211
         comm.Sendrecv(sendBorderBufY, neighborRankSend, sendTag,
                       recvBorderBufY, neighborRankRecv, recvTag)
-    
+
         # update border YMIN
-        for iVar in xrange(NBVAR):
-            for j in xrange(gw):
-                for i in xrange(isize):
+        for iVar in range(NBVAR):
+            for j in range(gw):
+                for i in range(isize):
                     offset = 0
                     U[i,j+offset,iVar] = recvBorderBufY[i,j,iVar]
-  
-                   
+
+
     ########################################################
     def convertToPrimitive(self,
                            np.ndarray[double, ndim=3] U,
@@ -616,25 +647,25 @@ cdef class hydroRun:
         cdef double[4] uLoc
         cdef double c
         cdef int ivar
-        
+
         isize = self.isize
         jsize = self.jsize
         gw    = self.gw
 
-        for j in xrange(0, jsize):
-            for i in xrange(0, isize):
+        for j in range(0, jsize):
+            for i in range(0, isize):
 
                 # get local conserved variables
                 for ivar in range(NBVAR):
                     uLoc[ivar] = U[i,j,ivar]
 
                 # convert to primitive variables
-                self.utils.computePrimitives(uLoc,qLoc,&c) 
+                self.utils.computePrimitives(uLoc,qLoc,&c)
 
                 # write back primitive variables to Q array
                 for ivar in range(NBVAR):
                     Q[i,j,ivar] = qLoc[ivar]
-    
+
     ########################################################
     def computeSlopesAndTrace(self,
                               np.ndarray[double, ndim=3] Q,
@@ -648,7 +679,7 @@ cdef class hydroRun:
         cdef int i,j, ivar
         cdef int isize, jsize
         cdef double dtdx, dtdy
-        
+
         # primitive variables
         cdef double[4] qLoc
         cdef double[4][4] qNeighbors
@@ -665,9 +696,9 @@ cdef class hydroRun:
         dtdy = dt / self.dy
         isize = self.isize
         jsize = self.jsize
-                
-        for j in xrange(1, jsize-1):
-            for i in xrange(1, isize-1):
+
+        for j in range(1, jsize-1):
+            for i in range(1, isize-1):
 
                 # retrieve primitive variables in neighborhood
                 for ivar in range(NBVAR):
@@ -692,7 +723,7 @@ cdef class hydroRun:
                     Qm_y[i,j,ivar] = qm[1][ivar]
                     Qp_y[i,j,ivar] = qp[1][ivar]
 
-                
+
     ########################################################
     def computeFluxesAndUpdate(self,
                                np.ndarray[double, ndim=3] U,
@@ -707,7 +738,7 @@ cdef class hydroRun:
         cdef int i,j, ivar
         cdef int isize, jsize, gw
         cdef double dtdx, dtdy
-        
+
         cdef double[4] qleft
         cdef double[4] qright
         cdef double[4] flux_x
@@ -719,10 +750,10 @@ cdef class hydroRun:
         jsize = self.jsize
         gw = self.gw
 
-        for j in xrange(gw, jsize-gw+1):
-            for i in xrange(gw, isize-gw+1):
+        for j in range(gw, jsize-gw+1):
+            for i in range(gw, isize-gw+1):
 
-    
+
                 #
                 # solve Riemann problem at X-interfaces
                 #
@@ -741,11 +772,11 @@ cdef class hydroRun:
 
                 # watchout IU, IV permutation
                 qleft[IU], qleft[IV] = qleft[IV], qleft[IU]
-                qright[IU], qright[IV]  = qright[IV], qright[IU] 
+                qright[IU], qright[IV]  = qright[IV], qright[IU]
 
                 self.utils.riemann_2d(qleft,qright,flux_y)
                 # swap flux_y components
-                flux_y[IU], flux_y[IV] = flux_y[IV], flux_y[IU] 
+                flux_y[IU], flux_y[IV] = flux_y[IV], flux_y[IU]
 
                 #
                 # update hydro array
@@ -753,11 +784,11 @@ cdef class hydroRun:
                 for ivar in range(NBVAR):
                     U2[i-1,j  ,ivar] += (-flux_x[ivar]*dtdx)
                     U2[i  ,j  ,ivar] += ( flux_x[ivar]*dtdx)
-                    
+
                     U2[i  ,j-1,ivar] += (-flux_y[ivar]*dtdy)
                     U2[i  ,j  ,ivar] += ( flux_y[ivar]*dtdy)
 
-                                    
+
     ########################################################
     def godunov_unsplit(self, int nStep, double dt):
         """
@@ -790,7 +821,7 @@ cdef class hydroRun:
         cdef double[4] dqY
         cdef double[4] dqX_n
         cdef double[4] dqY_n
-        
+
         cdef double[4] qleft
         cdef double[4] qright
         cdef double[4] flux_x
@@ -801,7 +832,7 @@ cdef class hydroRun:
         cdef double[3][4] qp_x
         cdef double[3][4] qp_y
 
-                
+
         cdef double[2][4] qm
         cdef double[2][4] qp
 
@@ -829,18 +860,18 @@ cdef class hydroRun:
         #     for j in range(jsize):
         #         for k in range(NBVAR):
         #             U2[i,j,k] = U[i,j,k]
-                    
+
         # main computation
         hydroMonitoring.godunov_timer.start()
 
         # convert to primitive variables
         self.convertToPrimitive(U, Q)
-        
+
         if self.implementationVersion==0:
 
-            for j in xrange(gw, jsize-gw+1):
-                for i in xrange(gw, isize-gw+1):
-	                  
+            for j in range(gw, jsize-gw+1):
+                for i in range(gw, isize-gw+1):
+
                     # compute slopes in current cell
                     for ivar in range(NBVAR):
                         qLoc[ivar] = Q[i  ,j  , ivar]
@@ -866,7 +897,7 @@ cdef class hydroRun:
 
                     # compute slopes in neighbor
                     self.utils.slope_unsplit_hydro_2d(qLocN, qNeighbors, dqX_n, dqY_n)
-                                        
+
                     # left interface : right state
                     self.utils.trace_unsplit_hydro_2d_by_direction(qLoc, dqX, dqY, dtdx, dtdy, FACE_XMIN, qright)
 
@@ -898,14 +929,14 @@ cdef class hydroRun:
                     self.utils.trace_unsplit_hydro_2d_by_direction(qLocN, dqX_n, dqY_n, dtdx, dtdy, FACE_YMAX, qleft)
 
                     # watchout IU, IV permutation
-                    qleft[IU], qleft[IV] = qleft[IV], qleft[IU]	  
+                    qleft[IU], qleft[IV] = qleft[IV], qleft[IU]
                     qright[IU], qright[IV] = qright[IV], qright[IU]
 
                     # compute riemann problem for Y interface
                     self.utils.riemann_2d(qleft,qright,flux_y)
 
                     # swap flux_y components
-                    flux_y[IU], flux_y[IV] = flux_y[IV], flux_y[IU] 
+                    flux_y[IU], flux_y[IV] = flux_y[IV], flux_y[IU]
 
                     #
                     # update hydro array
@@ -940,7 +971,7 @@ cdef class hydroRun:
         else:
             # unknow version
             pass
-            
+
         hydroMonitoring.godunov_timer.stop()
 
     ########################################################
@@ -952,10 +983,10 @@ cdef class hydroRun:
         # filename in C
         cdef char *filename_c=filename
 
-        cdef char* varName    
+        cdef char* varName
         cdef bytes varName_bytes
 
-        
+
         # local variables
         cdef int i,j,iVar
 
@@ -969,7 +1000,7 @@ cdef class hydroRun:
 
         cdef int nx = self.nx
         cdef int ny = self.ny
-    
+
         cdef int imin = self.imin
         cdef int imax = self.imax
         cdef int jmin = self.jmin
@@ -978,12 +1009,12 @@ cdef class hydroRun:
         cdef int gw = self.gw
 
         cdef FILE *fp
-        
+
         # rank 0 must write pvtk file wrapper
         if myRank==0:
             self.write_pvtk_wrapper(iStep)
 
-        # open file 
+        # open file
         fp = fopen(filename_c, "w")
 
         # write header
@@ -999,17 +1030,17 @@ cdef class hydroRun:
         fprintf(fp, "    <CellData>\n")
 
         # write data array (ascii), remove ghost cells
-        for iVar in xrange(NBVAR):
+        for iVar in range(NBVAR):
             fprintf(fp, "    <DataArray type=\"")
             fprintf(fp, "Float64")
             varName_bytes = varNames(iVar)
             varName = varName_bytes
             fprintf(fp, "\" Name=\"%s\" format=\"ascii\" >\n",varName)
-    
-            for j in xrange(jmin+gw, jmax-gw+1):
-                for i in xrange(imin+gw, imax-gw+1):
+
+            for j in range(jmin+gw, jmax-gw+1):
+                for i in range(imin+gw, imax-gw+1):
                     fprintf(fp, "%f ", U[i,j,iVar])
-      
+
             fprintf(fp, "\n    </DataArray>\n")
 
         fprintf(fp, "    </CellData>\n")
@@ -1018,7 +1049,7 @@ cdef class hydroRun:
         fprintf(fp, "  </Piece>\n")
         fprintf(fp, "  </ImageData>\n")
         fprintf(fp, "</VTKFile>\n")
-    
+
         # close file
         fclose(fp)
 
@@ -1034,8 +1065,8 @@ cdef class hydroRun:
 
         cdef char* filename
         cdef bytes filename_bytes
-        
-        cdef char* varName    
+
+        cdef char* varName
         cdef bytes varName_bytes
 
         cdef int iVar, iPiece
@@ -1051,10 +1082,10 @@ cdef class hydroRun:
 
         cdef int nx = self.nx
         cdef int ny = self.ny
-    
+
         cdef int mx = self.mx
         cdef int my = self.my
-    
+
         cdef int imin = self.imin
         cdef int imax = self.imax
         cdef int jmin = self.jmin
@@ -1064,14 +1095,14 @@ cdef class hydroRun:
 
         #if sizeof(real_t) == sizeof(double):
         #    useDouble = True
-        
-        # open pvtk file 
+
+        # open pvtk file
         pvtk_filename_bytes = b"euler2d_mpi"
         pvtk_filename_bytes += b"_step_"
-        pvtk_filename_bytes += b"{0:07d}".format(iStep)
+        pvtk_filename_bytes += bytes("{0:07d}".format(iStep), encoding='utf-8')
         pvtk_filename_bytes += b".pvti"
         pvtk_filename = pvtk_filename_bytes
-        
+
         fp = fopen(pvtk_filename, "w")
 
         # write pvtk header
@@ -1079,25 +1110,25 @@ cdef class hydroRun:
         fprintf(fp,"<VTKFile type=\"PImageData\" version=\"0.1\" byte_order=\"LittleEndian\">\n")
         fprintf(fp,"  <PImageData WholeExtent=\"%d %d %d %d %d %d\" GhostLevel=\"0\" Origin=\"0 0 0\" Spacing=\"1 1 1\">\n",0,mx*nx,0,my*ny,0,1)
         fprintf(fp,"    <PCellData Scalars=\"Scalars_\">\n")
-        for iVar in xrange(NBVAR):
+        for iVar in range(NBVAR):
             varName_bytes = varNames(iVar)
             varName = varName_bytes
             fprintf(fp,"      <PDataArray type=\"Float64\" Name=\"%s\"/>\n", varName)
-  
+
         fprintf(fp,"    </PCellData>\n")
-  
+
         # write pvtk data
         # one piece per MPI process (identified by iPiece)
-        for iPiece in xrange(nProc):
-    
+        for iPiece in range(nProc):
+
             # concatenate file prefix + file number + suffix
             filename_bytes = b"euler2d_mpi_"
-            filename_bytes += b"{0:07d}".format(iPiece)
+            filename_bytes += bytes("{0:07d}".format(iPiece), encoding='utf-8')
             filename_bytes += b"_step_"
-            filename_bytes += b"{0:07d}".format(iStep)
+            filename_bytes += bytes("{0:07d}".format(iStep), encoding='utf-8')
             filename_bytes += b".vti"
             filename = filename_bytes
-            
+
             jProc = iPiece / mx
             iProc = iPiece - mx*jProc
             fprintf(fp, "    <Piece Extent=\"%d %d %d %d %d %d\" Source=\"%s\"/>\n", iProc*nx,iProc*nx+nx,jProc*ny,jProc*ny+ny,0,1,filename)
@@ -1105,7 +1136,6 @@ cdef class hydroRun:
         # write footer
         fprintf(fp, "</PImageData>\n")
         fprintf(fp, "</VTKFile>\n")
- 
+
         # close file
         fclose(fp)
-
