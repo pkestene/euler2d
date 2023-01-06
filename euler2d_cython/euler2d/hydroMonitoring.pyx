@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# cython: language_level = 3
+
 #from posix.time  cimport timeval
 
 
@@ -31,7 +33,7 @@ cdef class hydroTimer:
 
     cdef public double start_time, total_time
     cdef public int running
-    
+
     def __init__(self):
 
         self.reset()
@@ -41,7 +43,7 @@ cdef class hydroTimer:
         self.start_time = 0.0
         self.total_time = 0.0
         self.running = 0
-        
+
     def start(self):
         cdef timeval now
         gettimeofday(&now, NULL)

@@ -1,4 +1,4 @@
-
+# cython: language_level = 3
 
 import numpy as np
 cimport numpy as np
@@ -30,4 +30,3 @@ print("id(toto), id(toto2) = {} {}".format(id(toto),id(toto2)))
 
 
 par = hp.hydroParams('./test.ini')
-

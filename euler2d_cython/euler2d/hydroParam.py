@@ -33,7 +33,7 @@ FACE_YMAX=3
 
 # type of boundary condition (note that BC_COPY is only used in the
 # MPI version for inside boundary)
-# enum BoundaryConditionType 
+# enum BoundaryConditionType
 BC_UNDEFINED = 0
 BC_DIRICHLET = 1   # reflecting border condition
 BC_NEUMANN   = 2   # absorbing border condition
@@ -48,7 +48,7 @@ class hydroParams(object):
 
     ########################################################
     def __init__(self, iniFilename):
-        
+
         self._parseIni(iniFilename)
         self._setParamFromFile()
         self._setParamOther()
@@ -56,10 +56,10 @@ class hydroParams(object):
     ########################################################
     def _parseIni(self, iniFilename):
 
-        import ConfigParser
-        
+        import configparser
+
         # parser input parameter file
-        self.Config = ConfigParser.ConfigParser()
+        self.Config = configparser.ConfigParser()
         self.Config.read(iniFilename)
 
     ########################################################
@@ -68,89 +68,89 @@ class hydroParams(object):
         Parse ini file, and set parameters.
         """
 
-        self.tEnd     = self.Config.getfloat('RUN','tEnd')
-        self.nStepmax = self.Config.getint('RUN','nStepmax')
-        self.nOutput  = self.Config.getint('RUN','nOutput')
+        self.tEnd     = self.Config['RUN'].getfloat('tEnd')
+        self.nStepmax = self.Config['RUN'].getint('nStepmax')
+        self.nOutput  = self.Config['RUN'].getint('nOutput')
 
-        self.nx       = self.Config.getint('MESH','nx')
-        self.ny       = self.Config.getint('MESH','ny')
+        self.nx       = self.Config['MESH'].getint('nx')
+        self.ny       = self.Config['MESH'].getint('ny')
 
-        self.boundary_type_xmin = self.Config.getint('MESH','boundary_type_xmin')
-        self.boundary_type_xmax = self.Config.getint('MESH','boundary_type_xmax')
-        self.boundary_type_ymin = self.Config.getint('MESH','boundary_type_ymin')
-        self.boundary_type_ymax = self.Config.getint('MESH','boundary_type_ymax')
-    
-        self.gamma0        = self.Config.getfloat('HYDRO','gamma0')
-        self.cfl           = self.Config.getfloat('HYDRO','cfl')
-        self.niter_riemann = self.Config.getint('HYDRO','niter_riemann') 
-        self.iorder        = self.Config.getint('HYDRO','iorder') 
-        self.slope_type    = self.Config.getint('HYDRO','slope_type') 
-        self.problem       = self.Config.get('HYDRO','problem','implode') 
+        self.boundary_type_xmin = self.Config['MESH'].getint('boundary_type_xmin')
+        self.boundary_type_xmax = self.Config['MESH'].getint('boundary_type_xmax')
+        self.boundary_type_ymin = self.Config['MESH'].getint('boundary_type_ymin')
+        self.boundary_type_ymax = self.Config['MESH'].getint('boundary_type_ymax')
+
+        self.gamma0        = self.Config['HYDRO'].getfloat('gamma0')
+        self.cfl           = self.Config['HYDRO'].getfloat('cfl')
+        self.niter_riemann = self.Config['HYDRO'].getint('niter_riemann')
+        self.iorder        = self.Config['HYDRO'].getint('iorder')
+        self.slope_type    = self.Config['HYDRO'].getint('slope_type')
+        self.problem       = self.Config['HYDRO'].get('problem','implode')
 
         # parse problem specific parameters
         if self.problem == 'blast':
 
             if self.Config.has_section('blast'):
 
-                if self.Config.has_option('blast','radius'):
-                    self.radius = self.Config.getfloat('blast','radius')
+                if self.Config['blast'].has_option('radius'):
+                    self.radius = self.Config['blast'].getfloat('radius')
                 else:
                     self.radius = 1.0
 
-                if self.Config.has_option('blast','center_x'):
-                    self.center_x = self.Config.getfloat('blast','center_x')
+                if self.Config['blast'].has_option('center_x'):
+                    self.center_x = self.Config['blast'].getfloat('center_x')
                 else:
                     self.center_x = self.nx/2.0
 
 
-                if self.Config.has_option('blast','center_y'):
-                    self.center_y = self.Config.getfloat('blast','center_y')
+                if self.Config['blast'].has_option('center_y'):
+                    self.center_y = self.Config['blast'].getfloat('center_y')
                 else:
                     self.center_y = self.ny/2.0
 
 
-                if self.Config.has_option('blast','density_in'):
-                    self.density_in = self.Config.getfloat('blast','density_in')
+                if self.Config['blast'].has_option('density_in'):
+                    self.density_in = self.Config.getfloat('density_in')
                 else:
                     self.density_in = 1.0
 
 
-                if self.Config.has_option('blast','density_out'):
-                    self.density_out = self.Config.getfloat('blast','density_out')
+                if self.Config['blast'].has_option('density_out'):
+                    self.density_out = self.Config.getfloat('density_out')
                 else:
                     self.density_out = 1.0
 
 
-                if self.Config.has_option('blast','pressure_in'):
-                    self.pressure_in = self.Config.getfloat('blast','pressure_in')
+                if self.Config['blast'].has_option('pressure_in'):
+                    self.pressure_in = self.Config.getfloat('pressure_in')
                 else:
                     self.pressure_in = 10.0
 
 
-                if self.Config.has_option('blast','pressure_out'):
-                    self.pressure_out = self.Config.getfloat('blast','pressure_out')
+                if self.Config['blast'].has_option('pressure_out'):
+                    self.pressure_out = self.Config.getfloat('pressure_out')
                 else:
                     self.pressure_out = 0.1
 
-                
+
             else:
                 print('Error: param file should have section named \'blast\'')
-        
-        self.implementationVersion  = self.Config.getint('OTHER','implementationVersion') 
-                
+
+        self.implementationVersion  = self.Config['OTHER'].getint('implementationVersion')
+
     ########################################################
     def _setParamOther(self):
-        
+
         self.ghostWidth = 2
 
         self.imin = 0
         self.jmin = 0
         self.imax = self.nx - 1 + 2*self.ghostWidth
         self.jmax = self.ny - 1 + 2*self.ghostWidth
-  
+
         self.isize = self.imax - self.imin + 1
         self.jsize = self.jmax - self.jmin + 1
-  
+
         self.xmin = 0.0
         self.xmax = 1.0
         self.ymin = 0.0
@@ -158,7 +158,7 @@ class hydroParams(object):
 
         self.dx = (self.xmax - self.xmin) / self.nx
         self.dy = (self.ymax - self.ymin) / self.ny
-  
+
         self.smallc  = 1e-7
         self.smallr  = 1e-7
         self.smallp  = self.smallc * self.smallc / self.gamma0
@@ -169,27 +169,27 @@ class hydroParams(object):
     ########################################################
     def printConfig(self):
 
-        print "##########################"
-        print "Simulation run parameters:"
-        print "##########################"
-        print "nx         : {}".format(self.nx)
-        print "ny         : {}".format(self.ny)
-        print "dx         : {}".format(self.dx)
-        print "dy         : {}".format(self.dy)
-        print "imin       : {}".format(self.imin)
-        print "imax       : {}".format(self.imax)
-        print "jmin       : {}".format(self.jmin)
-        print "jmax       : {}".format(self.jmax)
-        print "nStepmax   : {}".format(self.nStepmax)
-        print "tEnd       : {}".format(self.tEnd)
-        print "nOutput    : {}".format(self.nOutput)
-        print "gamma0     : {}".format(self.gamma0)
-        print "cfl        : {}".format(self.cfl)
-        print "smallr     : {}".format(self.smallr)
-        print "smallc     : {}".format(self.smallc)
-        print "iorder     : {}".format(self.iorder)
-        print "slope_type : {}".format(self.slope_type)
-        print "problem    : {}".format(self.problem)
+        print("##########################")
+        print("Simulation run parameters:")
+        print("##########################")
+        print("nx         : {}".format(self.nx))
+        print("ny         : {}".format(self.ny))
+        print("dx         : {}".format(self.dx))
+        print("dy         : {}".format(self.dy))
+        print("imin       : {}".format(self.imin))
+        print("imax       : {}".format(self.imax))
+        print("jmin       : {}".format(self.jmin))
+        print("jmax       : {}".format(self.jmax))
+        print("nStepmax   : {}".format(self.nStepmax))
+        print("tEnd       : {}".format(self.tEnd))
+        print("nOutput    : {}".format(self.nOutput))
+        print("gamma0     : {}".format(self.gamma0))
+        print("cfl        : {}".format(self.cfl))
+        print("smallr     : {}".format(self.smallr))
+        print("smallc     : {}".format(self.smallc))
+        print("iorder     : {}".format(self.iorder))
+        print("slope_type : {}".format(self.slope_type))
+        print("problem    : {}".format(self.problem))
 
 
     ########################################################
