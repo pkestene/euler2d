@@ -1,4 +1,7 @@
+#
+# Build project:
 # python setup.py build_ext --inplace
+#
 
 import os, re
 from os.path import join as pjoin
@@ -12,8 +15,11 @@ from Cython.Distutils import build_ext
 import Cython.Compiler.Options
 Cython.Compiler.Options.annotate = True
 
+# clean command
 from distutils.command.clean import clean as _clean
 from distutils.dir_util import remove_tree
+
+# numpy 
 import numpy
 
 #from distutils.core import setup
