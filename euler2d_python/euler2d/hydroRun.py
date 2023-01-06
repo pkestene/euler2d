@@ -435,12 +435,10 @@ class hydroRun(object):
 def saveVTK(U, filename):
     """
     Main IO routine. Save U array into a vtk file.
-    filename should include .vti suffix
+    filename should NOT include .vti suffix
     """
 
-    # filename without suffix (.vti)
-
-    # use tvtk module if available
+    # use vtk module if available
     if vtkModuleFound:
         # create an imageData
         import vtk.util.numpy_support as numpy_support
